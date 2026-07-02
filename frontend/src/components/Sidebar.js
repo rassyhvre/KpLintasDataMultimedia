@@ -13,12 +13,12 @@ function Sidebar({ admin, onLogout }) {
         { path: '/dashboard/paket', icon: '📦', label: 'Paket Layanan' },
         { path: '/dashboard/mikrotik', icon: '🌐', label: 'Mikrotik' },
         { path: '/dashboard/reminder-logs', icon: '🔔', label: 'Log Reminder WA' },
+        { path: '/dashboard/pembayaran', icon: '💰', label: 'Persetujuan Bayar' },
       ]
     },
     {
       section: 'Segera Hadir',
       items: [
-        { path: '#', icon: '💰', label: 'Pembayaran', disabled: true },
         { path: '#', icon: '📄', label: 'Laporan', disabled: true },
       ]
     }

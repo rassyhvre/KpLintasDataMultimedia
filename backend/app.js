@@ -13,6 +13,9 @@ var pelangganRouter = require('./routes/pelanggan');
 var paketRouter = require('./routes/paket');
 var mikrotikRouter = require('./routes/mikrotik');
 var reminderRouter = require('./routes/reminder');
+var customerAuthRouter = require('./routes/customerAuth');
+var customerPortalRouter = require('./routes/customerPortal');
+var pembayaranRouter = require('./routes/pembayaran');
 
 // Database Connection
 var db = require('./config/db');
@@ -43,6 +46,9 @@ app.use('/api/pelanggan', pelangganRouter);
 app.use('/api/paket', paketRouter);
 app.use('/api/mikrotik', mikrotikRouter);
 app.use('/api/reminder', reminderRouter);
+app.use('/api/customer/auth', customerAuthRouter);
+app.use('/api/customer/portal', customerPortalRouter);
+app.use('/api/pembayaran', pembayaranRouter);
 
 // Start Cron Service
 var cronService = require('./services/cronService');

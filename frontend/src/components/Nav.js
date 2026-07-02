@@ -10,6 +10,7 @@ function Navbar() {
     '/dashboard/paket': { title: 'Paket Layanan', subtitle: 'Kelola paket internet' },
     '/dashboard/mikrotik': { title: 'Monitoring Mikrotik', subtitle: 'Status koneksi & active sessions' },
     '/dashboard/reminder-logs': { title: 'Log Reminder WhatsApp', subtitle: 'Riwayat pengiriman notifikasi jatuh tempo' },
+    '/dashboard/pembayaran': { title: 'Persetujuan Pembayaran', subtitle: 'Verifikasi bukti transfer & aktifkan internet' },
   };
 
   var currentPage = pageTitles[location.pathname] || { title: 'Dashboard', subtitle: '' };

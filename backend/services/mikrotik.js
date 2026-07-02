@@ -82,6 +82,80 @@ var MikrotikService = {
     } catch (err) {
       return false;
     }
+  },
+
+  // Enable PPPoE Secret
+  enableSecret: async function(username) {
+    if (!username) return;
+    try {
+      console.log(`[Mikrotik] Enabling PPPoE secret: ${username}`);
+      // Find secret first to get its .id (required for set commands)
+      var secrets = await executeCommand('/ppp/secret/print', ['?name=' + username]);
+      if (secrets && secrets.length > 0) {
+        var secretId = secrets[0]['.id'];
+        await executeCommand('/ppp/secret/set', [
+          '=.id=' + secretId,
+          '=disabled=no'
+        ]);
+        console.log(`[Mikrotik] PPPoE secret ${username} enabled successfully.`);
+        return true;
+      }
+      console.warn(`[Mikrotik] Secret ${username} not found, cannot enable.`);
+      return false;
+    } catch (err) {
+      console.error(`[Mikrotik] Failed to enable secret ${username}:`, err.message);
+      throw err;
+    }
+  },
+
+  // Disable PPPoE Secret
+  disableSecret: async function(username) {
+    if (!username) return;
+    try {
+      console.log(`[Mikrotik] Disabling PPPoE secret: ${username}`);
+      // Find secret first to get its .id
+      var secrets = await executeCommand('/ppp/secret/print', ['?name=' + username]);
+      if (secrets && secrets.length > 0) {
+        var secretId = secrets[0]['.id'];
+        await executeCommand('/ppp/secret/set', [
+          '=.id=' + secretId,
+          '=disabled=yes'
+        ]);
+        console.log(`[Mikrotik] PPPoE secret ${username} disabled successfully.`);
+        
+        // Also disconnect their active session immediately (kick them off)
+        await this.disconnectSession(username);
+        return true;
+      }
+      console.warn(`[Mikrotik] Secret ${username} not found, cannot disable.`);
+      return false;
+    } catch (err) {
+      console.error(`[Mikrotik] Failed to disable secret ${username}:`, err.message);
+      throw err;
+    }
+  },
+
+  // Disconnect active PPPoE session
+  disconnectSession: async function(username) {
+    if (!username) return;
+    try {
+      console.log(`[Mikrotik] Checking for active session to disconnect: ${username}`);
+      // Find active connection ID
+      var activeConns = await executeCommand('/ppp/active/print', ['?name=' + username]);
+      if (activeConns && activeConns.length > 0) {
+        var connId = activeConns[0]['.id'];
+        await executeCommand('/ppp/active/remove', [
+          '=.id=' + connId
+        ]);
+        console.log(`[Mikrotik] Kicked active session for user ${username}.`);
+        return true;
+      }
+      console.log(`[Mikrotik] No active session found for user ${username} to disconnect.`);
+      return false;
+    } catch (err) {
+      console.error(`[Mikrotik] Failed to disconnect session for ${username}:`, err.message);
+      throw err;
+    }
   }
 };
 
