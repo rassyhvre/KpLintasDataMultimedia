@@ -2,7 +2,7 @@ var cron = require('node-cron');
 var Tagihan = require('../models/Tagihan');
 var Pelanggan = require('../models/Pelanggan');
 var ReminderLog = require('../models/ReminderLog');
-var WhatsAppService = require('./whatsapp');
+var EmailService = require('./emailService');
 var SocketService = require('./socket');
 
 // Helper to calculate difference in days between two dates
@@ -15,7 +15,7 @@ function getDaysDifference(date1, date2) {
 
 var CronService = {
   start: function() {
-    console.log('Daily Cron Job for billing status & WA reminder initialized.');
+    console.log('Daily Cron Job for billing status & Email reminder initialized.');
     
     // Schedule to run every day at 07:00 AM
     // Schedule format: minute hour day-of-month month day-of-week
@@ -44,7 +44,7 @@ var CronService = {
         var daysDiff = getDaysDifference(dueDate, today);
         
         var newStatus = 'hijau';
-        var shouldSendWA = false;
+        var shouldSendReminder = false;
 
         if (daysDiff < 0) {
           // Overdue / Late
@@ -58,7 +58,7 @@ var CronService = {
         } else if (daysDiff >= 1 && daysDiff <= 3) {
           // Due in 1 to 3 days
           newStatus = 'kuning';
-          shouldSendWA = true;
+          shouldSendReminder = true;
         } else {
           // Far from due date
           newStatus = 'hijau';
@@ -83,9 +83,9 @@ var CronService = {
           });
         }
 
-        // 2. Send WhatsApp Reminder if status is kuning and not sent today
-        if (shouldSendWA) {
-          await this.processWAReminder(bill);
+        // 2. Send Email Reminder if status is kuning and not sent today
+        if (shouldSendReminder) {
+          await this.processEmailReminder(bill);
         }
       }
       
@@ -93,10 +93,10 @@ var CronService = {
     });
   },
 
-  processWAReminder: async function(bill) {
+  processEmailReminder: async function(bill) {
     var idPelanggan = bill.id_pelanggan;
     var name = bill.nama;
-    var phone = bill.no_hp;
+    var email = bill.email;
     var nominal = Number(bill.nominal).toLocaleString('id-ID');
     var dueDateString = new Date(bill.due_date).toLocaleDateString('id-ID', {
       day: 'numeric',
@@ -104,7 +104,13 @@ var CronService = {
       year: 'numeric'
     });
     var periode = bill.periode;
-    var paymentUrl = `${process.env.PAYMENT_PORTAL_URL || 'http://localhost:3001/bayar'}/${phone}`;
+    var paymentUrl = `${process.env.PAYMENT_PORTAL_URL || 'http://localhost:3001/bayar'}`;
+
+    // Check if customer has email
+    if (!email) {
+      console.log(`[Cron Service] Pelanggan ${name} tidak memiliki email. Skipping reminder.`);
+      return;
+    }
 
     // Check if reminder was already sent today to prevent duplicates
     return new Promise((resolve) => {
@@ -116,21 +122,26 @@ var CronService = {
         }
 
         if (alreadySent) {
-          console.log(`[Cron Service] Reminder already sent today to ${name} (${phone}). Skipping.`);
+          console.log(`[Cron Service] Reminder already sent today to ${name} (${email}). Skipping.`);
           resolve();
           return;
         }
 
-        // Construct message
+        // Construct plain text message for logging
         var message = `Halo ${name},\n\n` +
           `Ini adalah pengingat otomatis dari ESP Lintas Data Multimedia.\n` +
-          `Tagihan internet Anda untuk periode ${periode} sebesar Rp ${nominal} akan jatuh tempo pada tanggal *${dueDateString}*.\n\n` +
-          `Silakan lakukan pembayaran dan konfirmasi melalui link berikut:\n` +
-          `${paymentUrl}\n\n` +
+          `Tagihan internet Anda untuk periode ${periode} sebesar Rp ${nominal} akan jatuh tempo pada tanggal ${dueDateString}.\n\n` +
+          `Silakan lakukan pembayaran dan konfirmasi melalui portal pembayaran kami.\n\n` +
           `Abaikan pesan ini jika Anda sudah melakukan pembayaran. Terima kasih.`;
 
-        // Send via Fonnte API
-        var result = await WhatsAppService.sendWhatsApp(phone, message);
+        // Send via Email
+        var result = await EmailService.sendReminderEmail(email, {
+          nama: name,
+          periode: periode,
+          nominal: nominal,
+          dueDateString: dueDateString,
+          paymentUrl: paymentUrl
+        });
 
         // Record in reminder_log
         ReminderLog.create({
