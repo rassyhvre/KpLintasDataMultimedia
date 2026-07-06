@@ -182,7 +182,7 @@ function PaketPage() {
                   <div style={{
                     width: '44px',
                     height: '44px',
-                    background: 'var(--primary-glow)',
+                    background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))',
                     borderRadius: 'var(--radius-md)',
                     display: 'flex',
                     alignItems: 'center',
