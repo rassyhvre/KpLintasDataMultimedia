@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 
@@ -55,6 +55,51 @@ function DashboardPage({ socket }) {
       }
     };
   }, [socket]);
+
+  var containerRef = useRef(null);
+  var [clientLines, setClientLines] = useState([]);
+
+  useEffect(() => {
+    function updateLines() {
+      if (!containerRef.current) return;
+      var container = containerRef.current;
+      var containerRect = container.getBoundingClientRect();
+      
+      var switchNode = container.querySelector('#switch-node');
+      var clientNodes = container.querySelectorAll('.client-node');
+      
+      if (switchNode && clientNodes.length > 0) {
+        var swRect = switchNode.getBoundingClientRect();
+        var swX = swRect.left - containerRect.left + swRect.width / 2;
+        var swY = swRect.top - containerRect.top + swRect.height;
+        
+        var newLines = Array.from(clientNodes).map(function(node) {
+          var cRect = node.getBoundingClientRect();
+          var isOnline = node.classList.contains('online');
+          var isWarning = node.classList.contains('warning');
+          var status = isOnline ? 'up' : (isWarning ? 'warning' : 'down');
+          
+          return {
+            x1: swX,
+            y1: swY - 6,
+            x2: cRect.left - containerRect.left + cRect.width / 2,
+            y2: cRect.top - containerRect.top + 6,
+            status: status
+          };
+        });
+        setClientLines(newLines);
+      }
+    }
+
+    updateLines();
+    window.addEventListener('resize', updateLines);
+    var timer = setTimeout(updateLines, 500); // re-calculate after rendering
+    
+    return function() {
+      window.removeEventListener('resize', updateLines);
+      clearTimeout(timer);
+    };
+  }, [customers, pppoeSummary, routerStatus, loading]);
 
   async function fetchStats() {
     try {
@@ -368,7 +413,7 @@ function DashboardPage({ socket }) {
           </div>
         </div>
 
-        <div className="topology-container">
+        <div className="topology-container" ref={containerRef}>
           {/* Level 1: Mikrotik Router */}
           <div className="topology-row" style={{ marginBottom: '10px' }}>
             <div className={`network-node ${routerStatus.online ? 'online' : 'offline'}`} title={`Mikrotik Router Gateway IP: ${routerStatus.online ? '192.168.50.1' : 'Offline'}`}>
@@ -389,7 +434,7 @@ function DashboardPage({ socket }) {
 
           {/* Level 2: Access Switch (CSW1) */}
           <div className="topology-row" style={{ marginBottom: '24px' }}>
-            <div className={`network-node ${routerStatus.online ? 'online' : 'offline'}`}>
+            <div id="switch-node" className={`network-node ${routerStatus.online ? 'online' : 'offline'}`}>
               <div className="node-icon-wrapper" style={{ width: '70px', height: '42px', borderRadius: '6px', background: 'linear-gradient(135deg, #334155, #1e293b)' }}>
                 {/* Cisco Switch Icon */}
                 <svg width="36" height="18" viewBox="0 0 24 12" fill="none" stroke={routerStatus.online ? 'var(--primary-light)' : 'var(--text-muted)'} strokeWidth="1.5">
@@ -408,9 +453,36 @@ function DashboardPage({ socket }) {
             <line 
               x1="50%" y1="78" 
               x2="50%" y2="148" 
-              className={`link-line ${routerStatus.online ? 'active' : ''}`}
+              style={{ stroke: routerStatus.online ? '#22C55E' : '#EF4444', strokeWidth: 2 }}
             />
-            {/* We will draw connectors from the Switch (located at x:50%, y:166) to the endpoints below */}
+            {routerStatus.online && (
+              <>
+                <circle cx="50%" cy="86" r="3.5" fill="#22C55E" />
+                <circle cx="50%" cy="140" r="3.5" fill="#22C55E" />
+              </>
+            )}
+            
+            {/* Connection: Switch to Endpoints */}
+            {clientLines.map(function(line, idx) {
+              var color = line.status === 'up' ? '#22C55E' : (line.status === 'warning' ? '#EF4444' : '#6B7280');
+              var stroke = line.status === 'up' ? '#22C55E' : (line.status === 'warning' ? '#EF4444' : 'var(--border-color)');
+              return (
+                <g key={'client-line-' + idx}>
+                  <line 
+                    x1={line.x1} y1={line.y1} 
+                    x2={line.x2} y2={line.y2} 
+                    style={{ 
+                      stroke: stroke, 
+                      strokeWidth: line.status === 'up' || line.status === 'warning' ? 2 : 1.5,
+                      strokeDasharray: 'none',
+                      opacity: line.status === 'down' ? 0.3 : 1
+                    }}
+                  />
+                  <circle cx={line.x1} cy={line.y1 + 8} r="3.5" fill={routerStatus.online ? '#22C55E' : '#EF4444'} />
+                  <circle cx={line.x2} cy={line.y2 - 8} r="3.5" fill={color} />
+                </g>
+              );
+            })}
           </svg>
 
           {/* Level 3: Client Endpoints */}
@@ -423,7 +495,7 @@ function DashboardPage({ socket }) {
                 {/* 1. Render Active PPPoE Registered Clients */}
                 {activeCustomers.map(function(cust) {
                   return (
-                    <div key={cust.id_pelanggan} className="network-node online" title={`Nama: ${cust.nama}\nPPPoE: ${cust.pppoe_username}\nPaket: ${cust.paket}\nStatus: Aktif Online`}>
+                    <div key={cust.id_pelanggan} className="network-node client-node online" title={`Nama: ${cust.nama}\nPPPoE: ${cust.pppoe_username}\nPaket: ${cust.paket}\nStatus: Aktif Online`}>
                       <span className="status-dot-pulse green" />
                       <div className="node-icon-wrapper">
                         {/* Computer SVG */}
@@ -442,7 +514,7 @@ function DashboardPage({ socket }) {
                 {/* 2. Render Unregistered Active Secrets (Warning Red PCs) */}
                 {unregisteredActive.map(function(conn, idx) {
                   return (
-                    <div key={'unreg-' + idx} className="network-node warning" title={`PPPoE User: ${conn.name}\nIP: ${conn.address}\nUptime: ${conn.uptime}\nWARNING: Tidak terdaftar di sistem!`}>
+                    <div key={'unreg-' + idx} className="network-node client-node warning" title={`PPPoE User: ${conn.name}\nIP: ${conn.address}\nUptime: ${conn.uptime}\nWARNING: Tidak terdaftar di sistem!`}>
                       <span className="status-dot-pulse red" />
                       <div className="node-icon-wrapper" style={{ background: 'rgba(239, 68, 68, 0.05)' }}>
                         {/* Laptop SVG Alert */}
@@ -460,7 +532,7 @@ function DashboardPage({ socket }) {
                 {/* 3. Render Offline / Inactive Registered Customers */}
                 {inactiveCustomers.map(function(cust) {
                   return (
-                    <div key={cust.id_pelanggan} className="network-node offline" title={`Nama: ${cust.nama}\nPPPoE: ${cust.pppoe_username}\nPaket: ${cust.paket}\nStatus: Terisolir / Offline`}>
+                    <div key={cust.id_pelanggan} className="network-node client-node offline" title={`Nama: ${cust.nama}\nPPPoE: ${cust.pppoe_username}\nPaket: ${cust.paket}\nStatus: Terisolir / Offline`}>
                       <div className="node-icon-wrapper">
                         {/* Computer SVG Grey */}
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
