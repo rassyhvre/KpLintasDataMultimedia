@@ -367,18 +367,18 @@
   transition: left var(--transition-normal);
 }
 
-  .topbar-title {
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: #f8fafc;
-  }
+.topbar-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
 
-  .topbar-title span {
-    color: #cbd5e1;
-    font-weight: 400;
-    font-size: 0.9rem;
-    margin-left: 8px;
-  }
+.topbar-title span {
+  color: #cbd5e1;
+  font-weight: 400;
+  font-size: 0.9rem;
+  margin-left: 8px;
+}
 
 .topbar-actions {
   display: flex;
@@ -912,8 +912,8 @@
    ============================================ */
 
 .landing-page {
-  background: #0a0f1a;
-  color: #e2e8f0;
+  background: #f8fafc;
+  color: #0f172a;
   min-height: 100vh;
   font-family: 'Hanken Grotesk', sans-serif;
   overflow-x: hidden;
@@ -926,16 +926,17 @@
   left: 0;
   right: 0;
   z-index: 100;
-  background: rgba(10, 15, 26, 0.75);
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .landing-nav-inner {
-  max-width: 1200px;
+  max-width: 1600px;
+  width: 100%;
   margin: 0 auto;
-  padding: 0 24px;
-  height: 64px;
+  padding: 0 40px;
+  height: 76px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -944,7 +945,7 @@
 .landing-nav-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 20px;
 }
 
 .landing-nav-logo {
@@ -1039,8 +1040,15 @@
 }
 
 @keyframes landing-glow {
-  0%, 100% { box-shadow: 0 4px 20px rgba(0, 104, 118, 0.3); }
-  50% { box-shadow: 0 4px 35px rgba(20, 163, 184, 0.5); }
+
+  0%,
+  100% {
+    box-shadow: 0 4px 20px rgba(0, 104, 118, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 4px 35px rgba(20, 163, 184, 0.5);
+  }
 }
 
 .landing-btn-ghost {
@@ -1074,6 +1082,17 @@
   justify-content: center;
   padding: 120px 24px 80px;
   overflow: hidden;
+}
+
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(45px) scale(0.98);
+  transition: opacity 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94), transform 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.reveal-on-scroll.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 .landing-hero-bg-orb {
@@ -1112,9 +1131,19 @@
 }
 
 @keyframes landing-float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(20px, -15px) scale(1.04); }
-  66% { transform: translate(-15px, 10px) scale(0.96); }
+
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  33% {
+    transform: translate(20px, -15px) scale(1.04);
+  }
+
+  66% {
+    transform: translate(-15px, 10px) scale(0.96);
+  }
 }
 
 .landing-hero-content {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TemplateIcon from '../components/TemplateIcon';
 
@@ -6,6 +6,33 @@ function LandingPage({ customer, onLogout }) {
   var navigate = useNavigate();
   var isLoggedIn = !!customer;
   var [openFaq, setOpenFaq] = useState(0);
+
+  useEffect(function () {
+    var sections = document.querySelectorAll('.reveal-on-scroll');
+    if (!sections.length || typeof IntersectionObserver === 'undefined') {
+      sections.forEach(function (section) { section.classList.add('is-visible'); });
+      return;
+    }
+
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, {
+      threshold: 0.2,
+    });
+
+    sections.forEach(function (section) {
+      observer.observe(section);
+    });
+
+    return function () {
+      observer.disconnect();
+    };
+  }, []);
 
   function handlePaymentClick() {
     if (isLoggedIn) {
@@ -58,7 +85,7 @@ function LandingPage({ customer, onLogout }) {
                 <span className="landing-nav-user">
                   <TemplateIcon name="user" size={15} /> {customer.nama}
                 </span>
-                <button className="landing-btn-outline" onClick={function() { navigate('/portal'); }}>
+                <button className="landing-btn-outline" onClick={function () { navigate('/portal'); }}>
                   <TemplateIcon name="money" size={15} /> Portal Saya
                 </button>
                 <button className="landing-btn-outline landing-btn-outline--muted" onClick={onLogout}>
@@ -66,7 +93,7 @@ function LandingPage({ customer, onLogout }) {
                 </button>
               </>
             ) : (
-              <button className="landing-btn-primary" onClick={function() { navigate('/bayar'); }}>
+              <button className="landing-btn-primary" onClick={function () { navigate('/bayar'); }}>
                 Bayar Tagihan
               </button>
             )}
@@ -115,7 +142,7 @@ function LandingPage({ customer, onLogout }) {
       </section>
 
       {/* Tentang Kami */}
-      <section className="landing-about" id="tentang">
+      <section className="landing-about reveal-on-scroll" id="tentang">
         <div className="landing-section-inner">
           <div className="landing-section-header">
             <h2 className="landing-section-title">Tentang Kami</h2>
@@ -160,7 +187,7 @@ function LandingPage({ customer, onLogout }) {
       </section>
 
       {/* Layanan */}
-      <section className="landing-features" id="layanan">
+      <section className="landing-features reveal-on-scroll" id="layanan">
         <div className="landing-section-inner">
           <div className="landing-section-header">
             <h2 className="landing-section-title">Layanan Kami</h2>
@@ -192,7 +219,7 @@ function LandingPage({ customer, onLogout }) {
       </section>
 
       {/* CTA WhatsApp */}
-      <section className="landing-cta-wa">
+      <section className="landing-cta-wa reveal-on-scroll">
         <div className="landing-cta-wa-inner">
           <div className="landing-cta-wa-text">
             <h2>Hubungi Kami Sekarang</h2>
@@ -205,14 +232,14 @@ function LandingPage({ customer, onLogout }) {
       </section>
 
       {/* Daftar Harga */}
-      <section className="landing-pricing" id="harga">
+      <section className="landing-pricing reveal-on-scroll" id="harga">
         <div className="landing-section-inner">
           <div className="landing-section-header">
             <h2 className="landing-section-title">Daftar Harga</h2>
             <p className="landing-section-subtitle">Pilih paket internet yang sesuai dengan kebutuhan Anda dari berbagai pilihan kecepatan dan harga kompetitif.</p>
           </div>
           <div className="landing-pricing-grid">
-            {packages.map(function(pkg, idx) {
+            {packages.map(function (pkg, idx) {
               return (
                 <div className={'landing-pricing-card' + (pkg.popular ? ' landing-pricing-card--popular' : '')} key={idx}>
                   {pkg.popular && <div className="landing-pricing-badge">Popular</div>}
@@ -223,7 +250,7 @@ function LandingPage({ customer, onLogout }) {
                     <span className="landing-pricing-period">/bulan</span>
                   </div>
                   <ul className="landing-pricing-features">
-                    {pkg.features.map(function(f, i) {
+                    {pkg.features.map(function (f, i) {
                       return <li key={i}><TemplateIcon name="check" size={14} color="#5eead4" /> {f}</li>;
                     })}
                   </ul>
@@ -242,7 +269,7 @@ function LandingPage({ customer, onLogout }) {
       </section>
 
       {/* CTA Bayar Tagihan */}
-      <section className="landing-cta">
+      <section className="landing-cta reveal-on-scroll">
         <div className="landing-cta-inner">
           <div className="landing-cta-content">
             <h2>Bayar Tagihan Anda Sekarang</h2>
@@ -275,16 +302,16 @@ function LandingPage({ customer, onLogout }) {
       </section>
 
       {/* FAQ */}
-      <section className="landing-faq" id="faq">
+      <section className="landing-faq reveal-on-scroll" id="faq">
         <div className="landing-section-inner">
           <div className="landing-section-header">
             <h2 className="landing-section-title">Pertanyaan Umum</h2>
             <p className="landing-section-subtitle">Temukan jawaban atas pertanyaan yang sering diajukan tentang layanan internet kami.</p>
           </div>
           <div className="landing-faq-list">
-            {faqs.map(function(faq, idx) {
+            {faqs.map(function (faq, idx) {
               return (
-                <div className={'landing-faq-item' + (openFaq === idx ? ' landing-faq-item--open' : '')} key={idx} onClick={function() { toggleFaq(idx); }}>
+                <div className={'landing-faq-item' + (openFaq === idx ? ' landing-faq-item--open' : '')} key={idx} onClick={function () { toggleFaq(idx); }}>
                   <div className="landing-faq-question">
                     <span>{faq.q}</span>
                     <TemplateIcon name={openFaq === idx ? 'chevron-down' : 'chevron-right'} size={18} />
@@ -298,7 +325,7 @@ function LandingPage({ customer, onLogout }) {
       </section>
 
       {/* Kontak */}
-      <section className="landing-contact" id="kontak">
+      <section className="landing-contact reveal-on-scroll" id="kontak">
         <div className="landing-section-inner">
           <div className="landing-section-header">
             <h2 className="landing-section-title">Hubungi Kami</h2>
@@ -335,7 +362,7 @@ function LandingPage({ customer, onLogout }) {
       </section>
 
       {/* Footer */}
-      <footer className="landing-footer">
+      <footer className="landing-footer reveal-on-scroll">
         <div className="landing-footer-inner">
           <div className="landing-footer-brand">
             <img src={process.env.PUBLIC_URL + '/logo ldm.png'} alt="Logo LDM" className="landing-footer-logo" />
