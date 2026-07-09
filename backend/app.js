@@ -28,9 +28,20 @@ var app = express();
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
-// CORS — izinkan React frontend (port 3001)
+// CORS — izinkan React frontend (port 3001) dan ngrok
 app.use(cors({
-  origin: ['http://localhost:3001', 'http://localhost:3000'],
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (
+      origin.startsWith('http://localhost:') || 
+      origin.endsWith('.ngrok-free.app') || 
+      origin.endsWith('.ngrok.io')
+    ) {
+      return callback(null, true);
+    }
+    // Fallback: izinkan origin lain untuk kemudahan development/ngrok
+    return callback(null, true);
+  },
   credentials: true
 }));
 

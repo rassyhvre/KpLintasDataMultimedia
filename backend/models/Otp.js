@@ -23,18 +23,26 @@ var Otp = {
   verifyOtp: function(email, otp, callback) {
     var sql = `
       SELECT * FROM customer_otp 
-      WHERE email = ? AND otp = ? AND expires_at > NOW()
+      WHERE email = ? AND otp = ?
     `;
     db.query(sql, [email, otp], function(err, results) {
       if (err) return callback(err, null);
       if (results.length === 0) {
-        return callback(null, null); // OTP invalid atau expired
+        return callback(null, null); // OTP invalid
+      }
+      
+      var otpRecord = results[0];
+      var now = new Date();
+      var expiresAt = new Date(otpRecord.expires_at);
+      
+      if (expiresAt < now) {
+        return callback(null, null); // OTP expired
       }
       
       // Hapus OTP setelah berhasil digunakan
       var deleteSql = 'DELETE FROM customer_otp WHERE email = ?';
       db.query(deleteSql, [email], function() {
-        callback(null, results[0]);
+        callback(null, otpRecord);
       });
     });
   }

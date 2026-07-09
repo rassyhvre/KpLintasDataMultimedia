@@ -255,43 +255,46 @@ router.put('/:id', async function(req, res) {
         targetCustomerStatus = 'kuning';
       }
 
-      // Check if a tagihan for this specific period already exists
-      var existingPeriodTagihan = await new Promise((resolve) => {
-        db.query("SELECT * FROM tagihan WHERE id_pelanggan = ? AND periode = ?", [id, period], (err, rows) => {
-          resolve(rows && rows[0] ? rows[0] : null);
-        });
-      });
+      // Check if this is extending the period (moving due_date to a future month)
+      var oldPeriod = pelanggan.due_date ? pelanggan.due_date.toISOString().split('T')[0].substring(0, 7) : '';
+      var isExtending = oldPeriod && period > oldPeriod;
 
-      if (existingPeriodTagihan) {
-        // Revert it to unpaid/late and set its new due date
-        await new Promise((resolve) => {
-          db.query("UPDATE tagihan SET due_date = ?, status = ? WHERE id_tagihan = ?", [updates.due_date, targetBillStatus, existingPeriodTagihan.id_tagihan], (err) => {
-            resolve();
-          });
-        });
-        
-        // Delete any future unpaid tagihan (since we reverted the current one)
-        await new Promise((resolve) => {
-          db.query("DELETE FROM tagihan WHERE id_pelanggan = ? AND periode > ? AND status != 'lunas'", [id, period], () => {
-            resolve();
-          });
-        });
-      } else {
-        // Find any active unpaid tagihan (e.g. future period) to shift back to this period
-        var activeTagihan = await new Promise((resolve) => {
-          db.query("SELECT * FROM tagihan WHERE id_pelanggan = ? AND status != 'lunas' ORDER BY due_date ASC LIMIT 1", [id], (err, rows) => {
+      if (isExtending) {
+        // Find unpaid tagihan for the old period
+        var oldUnpaidTagihan = await new Promise((resolve) => {
+          db.query("SELECT * FROM tagihan WHERE id_pelanggan = ? AND periode = ? AND status != 'lunas'", [id, oldPeriod], (err, rows) => {
             resolve(rows && rows[0] ? rows[0] : null);
           });
         });
 
-        if (activeTagihan) {
+        if (oldUnpaidTagihan) {
+          // 1. Mark the old period's tagihan as 'lunas' (paid)
           await new Promise((resolve) => {
-            db.query("UPDATE tagihan SET due_date = ?, periode = ?, status = ? WHERE id_tagihan = ?", [updates.due_date, period, targetBillStatus, activeTagihan.id_tagihan], (err) => {
-              resolve();
-            });
+            db.query("UPDATE tagihan SET status = 'lunas', updated_at = NOW() WHERE id_tagihan = ?", [oldUnpaidTagihan.id_tagihan], () => resolve());
+          });
+
+          // 2. Record payment in pembayaran table so it shows up in reports
+          await new Promise((resolve) => {
+            db.query(
+              "INSERT INTO pembayaran (id_tagihan, bukti_file, status, tanggal_upload, verified_at, id_admin) VALUES (?, 'Bayar Tunai / Diubah Admin', 'diterima', NOW(), NOW(), ?)",
+              [oldUnpaidTagihan.id_tagihan, req.adminId || null],
+              () => resolve()
+            );
+          });
+        }
+
+        // 3. Create or update the tagihan for the new period
+        var existingPeriodTagihan = await new Promise((resolve) => {
+          db.query("SELECT * FROM tagihan WHERE id_pelanggan = ? AND periode = ?", [id, period], (err, rows) => {
+            resolve(rows && rows[0] ? rows[0] : null);
+          });
+        });
+
+        if (existingPeriodTagihan) {
+          await new Promise((resolve) => {
+            db.query("UPDATE tagihan SET due_date = ?, status = ? WHERE id_tagihan = ?", [updates.due_date, targetBillStatus, existingPeriodTagihan.id_tagihan], () => resolve());
           });
         } else {
-          // Create a new unpaid bill
           var pkg = updates.paket || pelanggan.paket;
           if (pkg) {
             var nominal = await new Promise((resolve) => {
@@ -311,6 +314,69 @@ router.put('/:id', async function(req, res) {
                   due_date: updates.due_date
                 }, () => resolve());
               });
+            }
+          }
+        }
+
+      } else {
+        // Standard non-extending logic (e.g. adjusting date within the same month, or moving back)
+        // Check if a tagihan for this specific period already exists
+        var existingPeriodTagihan = await new Promise((resolve) => {
+          db.query("SELECT * FROM tagihan WHERE id_pelanggan = ? AND periode = ?", [id, period], (err, rows) => {
+            resolve(rows && rows[0] ? rows[0] : null);
+          });
+        });
+
+        if (existingPeriodTagihan) {
+          // Revert it to unpaid/late and set its new due date
+          await new Promise((resolve) => {
+            db.query("UPDATE tagihan SET due_date = ?, status = ? WHERE id_tagihan = ?", [updates.due_date, targetBillStatus, existingPeriodTagihan.id_tagihan], (err) => {
+              resolve();
+            });
+          });
+          
+          // Delete any future unpaid tagihan (since we reverted the current one)
+          await new Promise((resolve) => {
+            db.query("DELETE FROM tagihan WHERE id_pelanggan = ? AND periode > ? AND status != 'lunas'", [id, period], () => {
+              resolve();
+            });
+          });
+        } else {
+          // Find any active unpaid tagihan (e.g. future period) to shift back to this period
+          var activeTagihan = await new Promise((resolve) => {
+            db.query("SELECT * FROM tagihan WHERE id_pelanggan = ? AND status != 'lunas' ORDER BY due_date ASC LIMIT 1", [id], (err, rows) => {
+              resolve(rows && rows[0] ? rows[0] : null);
+            });
+          });
+
+          if (activeTagihan) {
+            await new Promise((resolve) => {
+              db.query("UPDATE tagihan SET due_date = ?, periode = ?, status = ? WHERE id_tagihan = ?", [updates.due_date, period, targetBillStatus, activeTagihan.id_tagihan], (err) => {
+                resolve();
+              });
+            });
+          } else {
+            // Create a new unpaid bill
+            var pkg = updates.paket || pelanggan.paket;
+            if (pkg) {
+              var nominal = await new Promise((resolve) => {
+                db.query('SELECT harga FROM paket_layanan WHERE nama_paket = ?', [pkg], (err, rows) => {
+                  resolve(rows && rows[0] ? rows[0].harga : 0);
+                });
+              });
+
+              if (nominal > 0) {
+                var Tagihan = require('../models/Tagihan');
+                await new Promise((resolve) => {
+                  Tagihan.create({
+                    id_pelanggan: id,
+                    periode: period,
+                    nominal: nominal,
+                    status: targetBillStatus,
+                    due_date: updates.due_date
+                  }, () => resolve());
+                });
+              }
             }
           }
         }
