@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import axios from 'axios';
+import { SOCKET_URL } from './config';
 import './App.css';
 
 import Sidebar from './components/Sidebar';
@@ -93,7 +94,7 @@ function App() {
   // Admin socket manager
   useEffect(function () {
     if (token && isAdminRoute) {
-      var newSocket = io('http://localhost:3000', {
+      var newSocket = io(SOCKET_URL, {
         transports: ['websocket'],
         auth: { token: token }
       });
@@ -195,8 +196,16 @@ function App() {
       <Route path="/" element={<LandingPage customer={customer} onLogout={handleCustomerLogout} />} />
 
       {/* Customer Login */}
-      <Route path="/bayar/:userEmail" element={<CustomerLoginPage onLogin={handleCustomerLogin} />} />
-      <Route path="/bayar" element={<CustomerLoginPage onLogin={handleCustomerLogin} />} />
+      <Route path="/bayar/:userEmail" element={
+        customer && customerToken
+          ? <Navigate to="/portal" replace />
+          : <CustomerLoginPage onLogin={handleCustomerLogin} />
+      } />
+      <Route path="/bayar" element={
+        customer && customerToken
+          ? <Navigate to="/portal" replace />
+          : <CustomerLoginPage onLogin={handleCustomerLogin} />
+      } />
 
       {/* Customer Portal — requires login */}
       <Route path="/portal" element={

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import TemplateIcon from '../components/TemplateIcon';
+import { API_BASE_URL } from '../config';
 
 function CustomerPortalPage({ onLogout }) {
   var [billing, setBilling] = useState(null);
@@ -24,7 +25,7 @@ function CustomerPortalPage({ onLogout }) {
 
   async function fetchMidtransConfig() {
     try {
-      var response = await axios.get('http://localhost:3000/api/customer/portal/midtrans-config', { headers: headers });
+      var response = await axios.get(`${API_BASE_URL}/api/customer/portal/midtrans-config`, { headers: headers });
       if (response.data.success) {
         var clientKey = response.data.clientKey;
         setMidtransClientKey(clientKey);
@@ -52,7 +53,7 @@ function CustomerPortalPage({ onLogout }) {
 
   async function fetchBilling() {
     try {
-      var response = await axios.get('http://localhost:3000/api/customer/portal/billing', { headers: headers });
+      var response = await axios.get(`${API_BASE_URL}/api/customer/portal/billing`, { headers: headers });
       if (response.data.success) {
         setBilling(response.data.data);
         setLastPayment(response.data.lastPayment);
@@ -87,7 +88,7 @@ function CustomerPortalPage({ onLogout }) {
     formData.append('bukti', file);
 
     try {
-      var response = await axios.post('http://localhost:3000/api/customer/portal/pay', formData, {
+      var response = await axios.post(`${API_BASE_URL}/api/customer/portal/pay`, formData, {
         headers: {
           ...headers,
           'Content-Type': 'multipart/form-data'
@@ -113,7 +114,7 @@ function CustomerPortalPage({ onLogout }) {
     setMessage({ type: '', text: '' });
 
     try {
-      var response = await axios.post('http://localhost:3000/api/customer/portal/midtrans-token', {
+      var response = await axios.post(`${API_BASE_URL}/api/customer/portal/midtrans-token`, {
         id_tagihan: billing.id_tagihan
       }, { headers: headers });
 
@@ -182,7 +183,7 @@ function CustomerPortalPage({ onLogout }) {
             <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '12px' }}>Scan Kode QRIS di bawah:</div>
             <div style={{ display: 'inline-block', padding: '10px', background: 'white', borderRadius: '5px', marginBottom: '8px' }}>
               <img
-                src="http://localhost:3000/images/qris.png"
+                src={`${API_BASE_URL}/images/qris.png`}
                 alt="QRIS ESP Lintas Data"
                 style={{ width: '180px', height: '180px', display: 'block', objectFit: 'contain' }}
               />

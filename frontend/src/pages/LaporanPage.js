@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Modal from '../components/Modal';
 import TemplateIcon from '../components/TemplateIcon';
+import { API_BASE_URL } from '../config';
 
 function LaporanPage() {
   var today = new Date();
@@ -46,9 +47,9 @@ function LaporanPage() {
     setChartLoading(true);
     var selectedYear = periode.split('-')[0] || new Date().getFullYear();
     try {
-      var summaryRes = await axios.get(`http://localhost:3000/api/reports/summary?periode=${periode}`, { headers: headers });
-      var detailsRes = await axios.get(`http://localhost:3000/api/reports/details?periode=${periode}`, { headers: headers });
-      var chartRes = await axios.get(`http://localhost:3000/api/reports/yearly-chart?year=${selectedYear}`, { headers: headers });
+      var summaryRes = await axios.get(`${API_BASE_URL}/api/reports/summary?periode=${periode}`, { headers: headers });
+      var detailsRes = await axios.get(`${API_BASE_URL}/api/reports/details?periode=${periode}`, { headers: headers });
+      var chartRes = await axios.get(`${API_BASE_URL}/api/reports/yearly-chart?year=${selectedYear}`, { headers: headers });
 
       if (summaryRes.data.success) {
         setSummary(summaryRes.data.data);
@@ -72,7 +73,7 @@ function LaporanPage() {
     e.preventDefault();
     setActionLoading(true);
     try {
-      var response = await axios.post('http://localhost:3000/api/pengeluaran', {
+      var response = await axios.post(`${API_BASE_URL}/api/pengeluaran`, {
         kategori: kategori,
         nominal: Number(nominal),
         tipe: tipe,
@@ -95,7 +96,7 @@ function LaporanPage() {
     e.preventDefault();
     setActionLoading(true);
     try {
-      var response = await axios.put(`http://localhost:3000/api/pengeluaran/${editTarget.id_pengeluaran}`, {
+      var response = await axios.put(`${API_BASE_URL}/api/pengeluaran/${editTarget.id_pengeluaran}`, {
         kategori: kategori,
         nominal: Number(nominal),
         tipe: tipe,
@@ -119,7 +120,7 @@ function LaporanPage() {
       return;
     }
     try {
-      var response = await axios.delete(`http://localhost:3000/api/pengeluaran/${id}`, { headers: headers });
+      var response = await axios.delete(`${API_BASE_URL}/api/pengeluaran/${id}`, { headers: headers });
       alert(response.data.message);
       fetchData();
     } catch (err) {
@@ -148,7 +149,7 @@ function LaporanPage() {
 
   async function handleExportExcel() {
     try {
-      var response = await axios.get(`http://localhost:3000/api/reports/export-excel?periode=${periode}`, {
+      var response = await axios.get(`${API_BASE_URL}/api/reports/export-excel?periode=${periode}`, {
         headers: headers,
         responseType: 'blob'
       });

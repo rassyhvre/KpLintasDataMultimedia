@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import MikrotikStatus from '../components/MikrotikStatus';
 import TemplateIcon from '../components/TemplateIcon';
+import { API_BASE_URL } from '../config';
 
 function MikrotikPage({ socket }) {
   var [status, setStatus] = useState({ online: false, error: 'Memuat...' });
@@ -37,13 +38,13 @@ function MikrotikPage({ socket }) {
 
   async function fetchData() {
     try {
-      var statusRes = await axios.get('http://localhost:3000/api/mikrotik/status', { headers: headers });
+      var statusRes = await axios.get(`${API_BASE_URL}/api/mikrotik/status`, { headers: headers });
       setStatus(statusRes.data.data);
 
-      var activeRes = await axios.get('http://localhost:3000/api/mikrotik/active', { headers: headers });
+      var activeRes = await axios.get(`${API_BASE_URL}/api/mikrotik/active`, { headers: headers });
       setActiveConns(activeRes.data.data);
 
-      var unregRes = await axios.get('http://localhost:3000/api/mikrotik/unregistered', { headers: headers });
+      var unregRes = await axios.get(`${API_BASE_URL}/api/mikrotik/unregistered`, { headers: headers });
       setUnregistered(unregRes.data.data);
     } catch (err) {
       console.error('Gagal mengambil data Mikrotik:', err);
@@ -55,9 +56,9 @@ function MikrotikPage({ socket }) {
   async function refreshActive() {
     setLoading(true);
     try {
-      var activeRes = await axios.get('http://localhost:3000/api/mikrotik/active', { headers: headers });
+      var activeRes = await axios.get(`${API_BASE_URL}/api/mikrotik/active`, { headers: headers });
       setActiveConns(activeRes.data.data);
-      var unregRes = await axios.get('http://localhost:3000/api/mikrotik/unregistered', { headers: headers });
+      var unregRes = await axios.get(`${API_BASE_URL}/api/mikrotik/unregistered`, { headers: headers });
       setUnregistered(unregRes.data.data);
     } catch (err) {
       console.error(err);

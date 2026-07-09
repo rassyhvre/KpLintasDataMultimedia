@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import TemplateIcon from '../components/TemplateIcon';
 
+import { API_BASE_URL } from '../config';
+
 function LoginPage({ onLogin }) {
   var [username, setUsername] = useState('');
   var [password, setPassword] = useState('');
@@ -14,7 +16,7 @@ function LoginPage({ onLogin }) {
     setLoading(true);
 
     try {
-      var response = await axios.post('http://localhost:3000/api/auth/login', {
+      var response = await axios.post(`${API_BASE_URL}/api/auth/login`, {
         username: username,
         password: password
       });

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Modal from '../components/Modal';
 import TemplateIcon from '../components/TemplateIcon';
+import { API_BASE_URL } from '../config';
 
 function PaketPage() {
   var [paketList, setPaketList] = useState([]);
@@ -27,7 +28,7 @@ function PaketPage() {
 
   async function fetchPaket() {
     try {
-      var response = await axios.get('http://localhost:3000/api/paket/all', { headers: headers });
+      var response = await axios.get(`${API_BASE_URL}/api/paket/all`, { headers: headers });
       if (response.data.success) {
         setPaketList(response.data.data);
       }
@@ -74,9 +75,9 @@ function PaketPage() {
 
     try {
       if (editMode) {
-        await axios.put('http://localhost:3000/api/paket/' + editId, formData, { headers: headers });
+        await axios.put(`${API_BASE_URL}/api/paket/` + editId, formData, { headers: headers });
       } else {
-        await axios.post('http://localhost:3000/api/paket', formData, { headers: headers });
+        await axios.post(`${API_BASE_URL}/api/paket`, formData, { headers: headers });
       }
       setShowModal(false);
       fetchPaket();
@@ -88,7 +89,7 @@ function PaketPage() {
 
   async function handleDelete(id) {
     try {
-      await axios.delete('http://localhost:3000/api/paket/' + id, { headers: headers });
+      await axios.delete(`${API_BASE_URL}/api/paket/` + id, { headers: headers });
       setDeleteConfirm(null);
       fetchPaket();
     } catch (err) {

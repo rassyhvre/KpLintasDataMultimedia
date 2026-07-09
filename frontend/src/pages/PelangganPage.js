@@ -3,6 +3,7 @@ import axios from 'axios';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
 import TemplateIcon from '../components/TemplateIcon';
+import { API_BASE_URL } from '../config';
 
 function PelangganPage({ socket }) {
   var [pelanggan, setPelanggan] = useState([]);
@@ -55,7 +56,7 @@ function PelangganPage({ socket }) {
 
   async function fetchPelanggan() {
     try {
-      var response = await axios.get('http://localhost:3000/api/pelanggan', { headers: headers });
+      var response = await axios.get(`${API_BASE_URL}/api/pelanggan`, { headers: headers });
       if (response.data.success) {
         setPelanggan(response.data.data);
       }
@@ -68,7 +69,7 @@ function PelangganPage({ socket }) {
 
   async function fetchPaket() {
     try {
-      var response = await axios.get('http://localhost:3000/api/paket');
+      var response = await axios.get(`${API_BASE_URL}/api/paket`);
       if (response.data.success) {
         setPaketList(response.data.data);
       }
@@ -79,7 +80,7 @@ function PelangganPage({ socket }) {
 
   async function fetchPppoeSecrets() {
     try {
-      var response = await axios.get('http://localhost:3000/api/mikrotik/secrets', { headers: headers });
+      var response = await axios.get(`${API_BASE_URL}/api/mikrotik/secrets`, { headers: headers });
       if (response.data.success) {
         setPppoeSecrets(response.data.data);
       }
@@ -131,9 +132,9 @@ function PelangganPage({ socket }) {
 
     try {
       if (editMode) {
-        await axios.put('http://localhost:3000/api/pelanggan/' + editId, formData, { headers: headers });
+        await axios.put(`${API_BASE_URL}/api/pelanggan/` + editId, formData, { headers: headers });
       } else {
-        await axios.post('http://localhost:3000/api/pelanggan', formData, { headers: headers });
+        await axios.post(`${API_BASE_URL}/api/pelanggan`, formData, { headers: headers });
       }
       setShowModal(false);
       fetchPelanggan();
@@ -145,7 +146,7 @@ function PelangganPage({ socket }) {
 
   async function handleDelete(id) {
     try {
-      await axios.delete('http://localhost:3000/api/pelanggan/' + id, { headers: headers });
+      await axios.delete(`${API_BASE_URL}/api/pelanggan/` + id, { headers: headers });
       setDeleteConfirm(null);
       fetchPelanggan();
     } catch (err) {

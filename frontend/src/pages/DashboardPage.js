@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { API_BASE_URL } from '../config';
 
 function DashboardPage({ socket }) {
   var [stats, setStats] = useState({
@@ -128,7 +129,7 @@ function DashboardPage({ socket }) {
   async function fetchStats() {
     try {
       var token = localStorage.getItem('token');
-      var response = await axios.get('http://localhost:3000/api/pelanggan/stats', {
+      var response = await axios.get(`${API_BASE_URL}/api/pelanggan/stats`, {
         headers: { Authorization: 'Bearer ' + token }
       });
       if (response.data.success) {
@@ -145,7 +146,7 @@ function DashboardPage({ socket }) {
     try {
       var token = localStorage.getItem('token');
       var headers = { Authorization: 'Bearer ' + token };
-      var statusRes = await axios.get('http://localhost:3000/api/mikrotik/status', { headers: headers });
+      var statusRes = await axios.get(`${API_BASE_URL}/api/mikrotik/status`, { headers: headers });
       setRouterStatus(statusRes.data.data);
     } catch (err) {
       console.error('Gagal mengambil status router:', err);
@@ -155,7 +156,7 @@ function DashboardPage({ socket }) {
   async function fetchCustomers() {
     try {
       var token = localStorage.getItem('token');
-      var response = await axios.get('http://localhost:3000/api/pelanggan', {
+      var response = await axios.get(`${API_BASE_URL}/api/pelanggan`, {
         headers: { Authorization: 'Bearer ' + token }
       });
       if (response.data.success) {

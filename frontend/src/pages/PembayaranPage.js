@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Modal from '../components/Modal';
 import TemplateIcon from '../components/TemplateIcon';
+import { API_BASE_URL } from '../config';
 
 function PembayaranPage({ socket }) {
   var [pendingPayments, setPendingPayments] = useState([]);
@@ -44,7 +45,7 @@ function PembayaranPage({ socket }) {
 
   async function fetchPending() {
     try {
-      var response = await axios.get('http://localhost:3000/api/pembayaran/pending', { headers: headers });
+      var response = await axios.get(`${API_BASE_URL}/api/pembayaran/pending`, { headers: headers });
       if (response.data.success) {
         setPendingPayments(response.data.data);
       }
@@ -62,7 +63,7 @@ function PembayaranPage({ socket }) {
 
     setActionLoading(true);
     try {
-      var response = await axios.post(`http://localhost:3000/api/pembayaran/${id_pembayaran}/approve`, {}, { headers: headers });
+      var response = await axios.post(`${API_BASE_URL}/api/pembayaran/${id_pembayaran}/approve`, {}, { headers: headers });
       alert(response.data.message);
       setViewBukti(null);
       fetchPending();
@@ -82,7 +83,7 @@ function PembayaranPage({ socket }) {
 
     setActionLoading(true);
     try {
-      var response = await axios.post(`http://localhost:3000/api/pembayaran/${rejectTarget.id_pembayaran}/reject`, {
+      var response = await axios.post(`${API_BASE_URL}/api/pembayaran/${rejectTarget.id_pembayaran}/reject`, {
         alasan_tolak: alasanTolak
       }, { headers: headers });
 
@@ -248,7 +249,7 @@ function PembayaranPage({ socket }) {
             </p> */}
             <div className="image-zoom-wrapper">
               <img
-                src={`http://localhost:3000${viewBukti.bukti_file}`}
+                src={`${API_BASE_URL}${viewBukti.bukti_file}`}
                 alt="Bukti Transfer Pelanggan"
                 className={zoomScale > 1 ? 'image-zoom-image zoomed' : 'image-zoom-image'}
                 onWheel={handleBuktiWheel}

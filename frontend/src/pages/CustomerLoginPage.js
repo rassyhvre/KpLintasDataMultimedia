@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
 import TemplateIcon from '../components/TemplateIcon';
+import { API_BASE_URL } from '../config';
 
 function CustomerLoginPage({ onLogin }) {
   var { userEmail } = useParams();
@@ -18,7 +19,7 @@ function CustomerLoginPage({ onLogin }) {
     setLoading(true);
 
     try {
-      var response = await axios.post('http://localhost:3000/api/customer/auth/request-otp', {
+      var response = await axios.post(`${API_BASE_URL}/api/customer/auth/request-otp`, {
         email: email
       });
 
@@ -39,7 +40,7 @@ function CustomerLoginPage({ onLogin }) {
     setLoading(true);
 
     try {
-      var response = await axios.post('http://localhost:3000/api/customer/auth/verify-otp', {
+      var response = await axios.post(`${API_BASE_URL}/api/customer/auth/verify-otp`, {
         email: email,
         otp: otp
       });

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import TemplateIcon from '../components/TemplateIcon';
+import { API_BASE_URL } from '../config';
 
 function ReminderLogPage() {
   var [logs, setLogs] = useState([]);
@@ -18,7 +19,7 @@ function ReminderLogPage() {
 
   async function fetchLogs() {
     try {
-      var response = await axios.get('http://localhost:3000/api/reminder/logs', { headers: headers });
+      var response = await axios.get(`${API_BASE_URL}/api/reminder/logs`, { headers: headers });
       if (response.data.success) {
         setLogs(response.data.data);
       }
@@ -32,7 +33,7 @@ function ReminderLogPage() {
   async function handleTriggerCron() {
     setTriggering(true);
     try {
-      var response = await axios.post('http://localhost:3000/api/reminder/trigger-cron', {}, { headers: headers });
+      var response = await axios.post(`${API_BASE_URL}/api/reminder/trigger-cron`, {}, { headers: headers });
       alert(response.data.message);
       fetchLogs();
     } catch (err) {
@@ -45,7 +46,7 @@ function ReminderLogPage() {
   async function handleDeleteLog(id) {
     if (!window.confirm('Apakah Anda yakin ingin menghapus log reminder ini?')) return;
     try {
-      var response = await axios.delete('http://localhost:3000/api/reminder/logs/' + id, { headers: headers });
+      var response = await axios.delete(`${API_BASE_URL}/api/reminder/logs/` + id, { headers: headers });
       alert(response.data.message);
       fetchLogs();
     } catch (err) {
@@ -56,7 +57,7 @@ function ReminderLogPage() {
   async function handleClearAllLogs() {
     if (!window.confirm('Apakah Anda yakin ingin menghapus SEMUA log reminder?')) return;
     try {
-      var response = await axios.delete('http://localhost:3000/api/reminder/logs', { headers: headers });
+      var response = await axios.delete(`${API_BASE_URL}/api/reminder/logs`, { headers: headers });
       alert(response.data.message);
       fetchLogs();
     } catch (err) {
