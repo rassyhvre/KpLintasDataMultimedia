@@ -46,7 +46,11 @@ var MikrotikService = {
       }
       return { online: false, error: 'Respon router kosong' };
     } catch (err) {
-      console.error('Mikrotik Connection Error detail:', err);
+      if (err.message.includes('belum dikonfigurasi')) {
+        console.log('[Mikrotik] Kredensial Mikrotik belum dikonfigurasi di file .env. Berjalan dalam mode offline.');
+      } else {
+        console.error('Mikrotik Connection Error detail:', err);
+      }
       return {
         online: false,
         error: err.message

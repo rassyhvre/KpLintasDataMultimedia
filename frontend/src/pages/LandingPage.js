@@ -1,10 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import HeroSplineScene from '../components/HeroSplineScene';
+import axios from 'axios';
+import { API_BASE_URL } from '../config';
 
 function LandingPage({ customer, onLogout }) {
   var navigate = useNavigate();
   var isLoggedIn = !!customer;
   var [openFaq, setOpenFaq] = useState(0);
+
+  var [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(function () {
+    function handleResize() {
+      setWindowWidth(window.innerWidth);
+    }
+    window.addEventListener('resize', handleResize);
+    return function () {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  var showSpline = windowWidth > 1024;
+  var isMobile = windowWidth <= 768;
 
   useEffect(function () {
     // Scroll-reveal observer
@@ -64,14 +82,54 @@ function LandingPage({ customer, onLogout }) {
     { q: 'Wilayah layanan di mana saja?', a: 'Kami melayani wilayah Pringsewu, Pagelaran, Sukoharjo, Kalirejo, Adiluwih, dan Banyumas. Jika lokasi Anda belum tercakup, hubungi kami untuk informasi ketersediaan ekspansi layanan.' }
   ];
 
-  var packages = [
+  var [packages, setPackages] = useState([
     { name: 'Paket 10 Mbps', speed: '10', price: '150.000', features: ['Kecepatan 10 Mbps', 'Unlimited tanpa FUP', 'Dukungan 24/7', 'Instalasi Gratis'] },
     { name: 'Paket 20 Mbps', speed: '20', price: '175.000', features: ['Kecepatan 20 Mbps', 'Unlimited tanpa FUP', 'Dukungan 24/7', 'Instalasi Gratis'] },
     { name: 'Paket 30 Mbps', speed: '30', price: '200.000', features: ['Kecepatan 30 Mbps', 'Unlimited tanpa FUP', 'Dukungan 24/7', 'Instalasi Gratis'], popular: true },
     { name: 'Paket 50 Mbps', speed: '50', price: '250.000', features: ['Kecepatan 50 Mbps', 'Unlimited tanpa FUP', 'Dukungan 24/7', 'Instalasi Gratis'] },
     { name: 'Paket 75 Mbps', speed: '75', price: '330.000', features: ['Kecepatan 75 Mbps', 'Unlimited tanpa FUP', 'Dukungan 24/7', 'Instalasi Gratis'] },
     { name: 'Paket Gamer 100 Mbps', speed: '100', price: '385.000', features: ['Kecepatan 100 Mbps', 'Unlimited tanpa FUP', 'Dukungan Prioritas 24/7', 'Instalasi Gratis'] }
-  ];
+  ]);
+
+  useEffect(function () {
+    async function fetchPackages() {
+      try {
+        var response = await axios.get(`${API_BASE_URL}/api/paket`);
+        if (response.data.success) {
+          var mapped = response.data.data.map(function(pkg, idx) {
+            var featuresList = [];
+            if (pkg.deskripsi) {
+              featuresList = pkg.deskripsi.split(',').map(function (f) { return f.trim(); }).filter(Boolean);
+            }
+            
+            if (featuresList.length === 0) {
+              featuresList = [
+                'Kecepatan ' + (pkg.kecepatan || '-'),
+                'Unlimited tanpa FUP',
+                'Dukungan 24/7',
+                'Instalasi Gratis'
+              ];
+            }
+
+            var formattedPrice = Number(pkg.harga || 0).toLocaleString('id-ID');
+
+            return {
+              id: pkg.id,
+              name: pkg.nama_paket,
+              speed: pkg.kecepatan || '',
+              price: formattedPrice,
+              features: featuresList,
+              popular: idx === 2 || pkg.nama_paket.toLowerCase().includes('30 mbps')
+            };
+          });
+          setPackages(mapped);
+        }
+      } catch (err) {
+        console.error('Gagal mengambil data paket real-time:', err);
+      }
+    }
+    fetchPackages();
+  }, []);
 
   function scrollToTop() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -95,19 +153,23 @@ function LandingPage({ customer, onLogout }) {
           <div className="landing-nav-actions">
             {isLoggedIn ? (
               <>
-                <span className="landing-nav-user">
-                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person</span> {customer.nama}
-                </span>
+                {!isMobile && (
+                  <span className="landing-nav-user">
+                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person</span> {customer.nama}
+                  </span>
+                )}
                 <button className="landing-btn-outline" onClick={function () { navigate('/portal'); }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>dashboard</span> Portal Saya
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>dashboard</span> {isMobile ? 'Portal' : 'Portal Saya'}
                 </button>
-                <button className="landing-btn-outline landing-btn-outline--muted" onClick={onLogout}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>logout</span> Keluar
-                </button>
+                {!isMobile && (
+                  <button className="landing-btn-outline landing-btn-outline--muted" onClick={onLogout}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>logout</span> Keluar
+                  </button>
+                )}
               </>
             ) : (
               <button className="landing-btn-primary" onClick={function () { navigate('/bayar'); }}>
-                Daftar Sekarang
+                {isMobile ? 'Bayar' : 'Daftar Sekarang'}
               </button>
             )}
           </div>
@@ -115,44 +177,95 @@ function LandingPage({ customer, onLogout }) {
       </nav>
 
       {/* Hero Section */}
-      <section className="landing-hero">
+      <section className="landing-hero" style={{
+        padding: showSpline ? '160px 48px 100px' : '120px 24px 80px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
         <div className="landing-hero-bg-orb landing-hero-bg-orb--1"></div>
         <div className="landing-hero-bg-orb landing-hero-bg-orb--2"></div>
         <div className="landing-hero-bg-orb landing-hero-bg-orb--3"></div>
-        <div className="landing-hero-content">
-          <div className="landing-hero-badge">
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>bolt</span>
-            Koneksi Tanpa Batas
+        
+        <div className="landing-hero-inner" style={{
+          display: 'flex',
+          flexDirection: showSpline ? 'row' : 'column',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          maxWidth: '1200px',
+          margin: '0 auto',
+          gap: '40px',
+          position: 'relative',
+          zIndex: 5
+        }}>
+          <div className="landing-hero-content" style={{
+            textAlign: showSpline ? 'left' : 'center',
+            maxWidth: showSpline ? '620px' : '720px',
+            margin: showSpline ? '0' : '0 auto',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: showSpline ? 'flex-start' : 'center',
+            flex: 1.2
+          }}>
+            <div className="landing-hero-badge">
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>bolt</span>
+              Koneksi Tanpa Batas
+            </div>
+            <h1 className="landing-hero-title" style={{
+              textAlign: showSpline ? 'left' : 'center'
+            }}>
+              Penyedia Layanan <span className="landing-hero-title--accent">Internet Terbaik</span> Untuk Anda
+            </h1>
+            <p className="landing-hero-subtitle" style={{
+              margin: showSpline ? '0 0 36px 0' : '0 auto 36px',
+              textAlign: showSpline ? 'left' : 'center'
+            }}>
+              Nikmati pengalaman browsing ultra-lancar dengan bandwidth yang disesuaikan khusus untuk kebutuhan rumah tangga dan bisnis profesional Anda.
+            </p>
+            <div className="landing-hero-actions" style={{
+              justifyContent: showSpline ? 'flex-start' : 'center',
+              width: '100%'
+            }}>
+              <a href="#harga" className="landing-btn-primary landing-btn-lg">
+                <span className="material-symbols-outlined">arrow_forward</span> Mulai Sekarang
+              </a>
+              <button className="landing-btn-ghost landing-btn-lg" onClick={handlePaymentClick}>
+                <span className="material-symbols-outlined">payments</span> Bayar Tagihan
+              </button>
+            </div>
+            <div className="landing-hero-stats" style={{
+              width: '100%',
+              justifyContent: showSpline ? 'space-between' : 'center'
+            }}>
+              <div className="landing-stat">
+                <div className="landing-stat-value">500+</div>
+                <div className="landing-stat-label">Pelanggan Aktif</div>
+              </div>
+              <div className="landing-stat-divider"></div>
+              <div className="landing-stat">
+                <div className="landing-stat-value">99.9%</div>
+                <div className="landing-stat-label">Uptime Jaringan</div>
+              </div>
+              <div className="landing-stat-divider"></div>
+              <div className="landing-stat">
+                <div className="landing-stat-value">24/7</div>
+                <div className="landing-stat-label">Dukungan Teknis</div>
+              </div>
+            </div>
           </div>
-          <h1 className="landing-hero-title">
-            Penyedia Layanan <span className="landing-hero-title--accent">Internet Terbaik</span> Untuk Anda
-          </h1>
-          <p className="landing-hero-subtitle">
-            Nikmati pengalaman browsing ultra-lancar dengan bandwidth yang disesuaikan khusus untuk kebutuhan rumah tangga dan bisnis profesional Anda.
-          </p>
-          <div className="landing-hero-actions">
-            <a href="#harga" className="landing-btn-primary landing-btn-lg">
-              <span className="material-symbols-outlined">arrow_forward</span> Mulai Sekarang
-            </a>
-            <button className="landing-btn-ghost landing-btn-lg" onClick={handlePaymentClick}>
-              <span className="material-symbols-outlined">payments</span> Bayar Tagihan
-            </button>
-          </div>
-          <div className="landing-hero-stats">
-            <div className="landing-stat">
-              <div className="landing-stat-value">500+</div>
-              <div className="landing-stat-label">Pelanggan Aktif</div>
-            </div>
-            <div className="landing-stat-divider"></div>
-            <div className="landing-stat">
-              <div className="landing-stat-value">99.9%</div>
-              <div className="landing-stat-label">Uptime Jaringan</div>
-            </div>
-            <div className="landing-stat-divider"></div>
-            <div className="landing-stat">
-              <div className="landing-stat-value">24/7</div>
-              <div className="landing-stat-label">Dukungan Teknis</div>
-            </div>
+
+          {/* Right side: 3D Spline Scene */}
+          <div className="landing-hero-visual" style={{
+            flex: showSpline ? 1 : 'none',
+            width: showSpline ? 'auto' : '100%',
+            maxWidth: showSpline ? 'none' : '450px',
+            height: showSpline ? '520px' : '350px',
+            position: 'relative',
+            margin: showSpline ? '0' : '20px auto 0',
+            display: 'block'
+          }}>
+            <HeroSplineScene logoCoverColor="#f8f9fa" />
           </div>
         </div>
       </section>

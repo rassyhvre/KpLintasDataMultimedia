@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
@@ -11,6 +11,20 @@ function CustomerLoginPage({ onLogin }) {
   var [error, setError] = useState('');
   var [successMsg, setSuccessMsg] = useState('');
   var [loading, setLoading] = useState(false);
+
+  var [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(function () {
+    function handleResize() {
+      setWindowWidth(window.innerWidth);
+    }
+    window.addEventListener('resize', handleResize);
+    return function () {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+
 
   async function handleRequestOtp(e) {
     e.preventDefault();
@@ -64,19 +78,26 @@ function CustomerLoginPage({ onLogin }) {
       alignItems: 'center',
       justifyContent: 'center',
       background: 'var(--md-surface-container-low)',
-      fontFamily: "'Hanken Grotesk', sans-serif",
-      padding: '24px'
+      fontFamily: "'Hanken Grotesk', sans-serif"
     }}>
       <div style={{
-        width: '100%',
-        maxWidth: 440,
-        animation: 'slideUp 0.5s ease-out'
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: windowWidth <= 480 ? '12px' : '24px',
+        zIndex: 2
       }}>
+        <div style={{
+          width: '100%',
+          maxWidth: 440,
+          animation: 'slideUp 0.5s ease-out'
+        }}>
         {/* Login Card — white rounded-2xl + ambient-shadow */}
         <div style={{
           background: 'var(--md-surface-container-lowest)',
           borderRadius: 'var(--radius-2xl)',
-          padding: '48px 40px',
+          padding: windowWidth <= 480 ? '24px 16px' : '48px 40px',
           boxShadow: '0px 4px 20px rgba(0, 75, 122, 0.08)'
         }}>
           {/* Logo */}
@@ -279,6 +300,8 @@ function CustomerLoginPage({ onLogin }) {
           )}
         </div>
       </div>
+    </div>
+
     </div>
   );
 }
