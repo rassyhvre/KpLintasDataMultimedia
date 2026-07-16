@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
+import StatRing from '../components/dashboard/StatRing';
+import IncomeSpendCard from '../components/dashboard/IncomeSpendCard';
+import PaymentTrendChart from '../components/dashboard/PaymentTrendChart';
+import TodayPaymentSummary from '../components/dashboard/TodayPaymentSummary';
+import { Link } from 'react-router-dom';
 
 function DashboardPage({ socket }) {
   var [stats, setStats] = useState({
@@ -15,10 +20,101 @@ function DashboardPage({ socket }) {
   var [pppoeSummary, setPppoeSummary] = useState({ active_count: 0, unregistered_count: 0, unregistered_list: [] });
   var [loading, setLoading] = useState(true);
 
+  // New report metrics state
+  var [summary, setSummary] = useState({ total_pemasukan: 0, total_pengeluaran: 0, laba_bersih: 0 });
+  var [verifiedCount, setVerifiedCount] = useState(0);
+  var [miniBarData, setMiniBarData] = useState([]);
+  var [dailyTrend, setDailyTrend] = useState([]);
+  var [todayPaymentsSum, setTodayPaymentsSum] = useState(0);
+  var [loadingReports, setLoadingReports] = useState(true);
+
+  var token = localStorage.getItem('token');
+  var headers = { Authorization: 'Bearer ' + token };
+
+  var fetchDashboardReports = async function() {
+    var today = new Date();
+    var currentMonthStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+
+    try {
+      setLoadingReports(true);
+
+      // 1. Fetch monthly financial summary
+      var summaryRes = await axios.get(API_BASE_URL + '/api/reports/summary?periode=' + currentMonthStr, { headers: headers });
+      if (summaryRes.data.success) {
+        setSummary(summaryRes.data.data);
+      }
+
+      // 2. Fetch reports details for counts (pemasukan_list)
+      var detailsRes = await axios.get(API_BASE_URL + '/api/reports/details?periode=' + currentMonthStr, { headers: headers });
+      if (detailsRes.data.success) {
+        var pemasukanList = detailsRes.data.data.pemasukan_list;
+        setVerifiedCount(pemasukanList.length);
+
+        // Compute today's payments total
+        var todayStr = today.toISOString().split('T')[0];
+        var todaySum = pemasukanList
+          .filter(function(item) {
+            return new Date(item.updated_at).toISOString().split('T')[0] === todayStr;
+          })
+          .reduce(function(sum, item) {
+            return sum + parseFloat(item.nominal);
+          }, 0);
+        setTodayPaymentsSum(todaySum);
+
+        // Fetch last month's details if we are in the first 10 days of the month for 10-day bar chart
+        var allIncomesForBar = [...pemasukanList];
+        if (today.getDate() < 10) {
+          var lastMonth = new Date();
+          lastMonth.setMonth(lastMonth.getMonth() - 1);
+          var lastMonthStr = lastMonth.getFullYear() + '-' + String(lastMonth.getMonth() + 1).padStart(2, '0');
+          try {
+            var lastMonthRes = await axios.get(API_BASE_URL + '/api/reports/details?periode=' + lastMonthStr, { headers: headers });
+            if (lastMonthRes.data.success) {
+              allIncomesForBar = [...allIncomesForBar, ...lastMonthRes.data.data.pemasukan_list];
+            }
+          } catch(e) { console.error('Error fetching last month for bar chart:', e); }
+        }
+
+        // Map to last 10 days
+        var dailyIncomeMap = {};
+        allIncomesForBar.forEach(function(item) {
+          var dateStr = new Date(item.updated_at).toISOString().split('T')[0];
+          dailyIncomeMap[dateStr] = (dailyIncomeMap[dateStr] || 0) + parseFloat(item.nominal);
+        });
+
+        var last10DaysData = [];
+        for (var i = 9; i >= 0; i--) {
+          var d = new Date();
+          d.setDate(today.getDate() - i);
+          var dateStr = d.toISOString().split('T')[0];
+          var dayName = d.toLocaleDateString('id-ID', { weekday: 'short' })[0]; // S, S, R, K, J, S, M
+          last10DaysData.push({
+            date: dateStr,
+            day: dayName,
+            value: dailyIncomeMap[dateStr] || 0
+          });
+        }
+        setMiniBarData(last10DaysData);
+      }
+
+      // 3. Fetch daily trend for the main area chart
+      var trendRes = await axios.get(API_BASE_URL + '/api/reports/daily-trend?periode=' + currentMonthStr, { headers: headers });
+      if (trendRes.data.success) {
+        setDailyTrend(trendRes.data.data.days);
+      }
+
+    } catch (err) {
+      console.error('Error loading dashboard reports data:', err);
+    } finally {
+      setLoadingReports(false);
+    }
+  };
+
   useEffect(function () {
     fetchStats();
     fetchRouterInfo();
     fetchCustomers();
+    fetchDashboardReports();
 
     if (socket) {
       socket.on('mikrotik_ping', function (pingData) {
@@ -31,6 +127,7 @@ function DashboardPage({ socket }) {
 
       socket.on('pelanggan_updated', function (data) {
         fetchStats();
+        fetchDashboardReports();
         // Update customer PPPoE status dynamically in state
         setCustomers(function (prev) {
           return prev.map(function (c) {
@@ -45,6 +142,10 @@ function DashboardPage({ socket }) {
           });
         });
       });
+
+      socket.on('pembayaran_masuk', function () {
+        fetchDashboardReports();
+      });
     }
 
     return function () {
@@ -52,6 +153,7 @@ function DashboardPage({ socket }) {
         socket.off('mikrotik_ping');
         socket.off('pppoe_summary');
         socket.off('pelanggan_updated');
+        socket.off('pembayaran_masuk');
       }
     };
   }, [socket]);
@@ -70,13 +172,15 @@ function DashboardPage({ socket }) {
       var switchNode = container.querySelector('#switch-node');
       var clientNodes = container.querySelectorAll('.client-node');
 
+      var routerRect, swRect, routerX, routerY, swX, swY_top, swY_bottom;
+
       if (routerNode && switchNode) {
-        var routerRect = routerNode.getBoundingClientRect();
-        var swRect = switchNode.getBoundingClientRect();
-        var routerX = routerRect.left - containerRect.left + routerRect.width / 2;
-        var routerY = routerRect.top - containerRect.top + routerRect.height;
-        var swX = swRect.left - containerRect.left + swRect.width / 2;
-        var swY_top = swRect.top - containerRect.top;
+        routerRect = routerNode.getBoundingClientRect();
+        swRect = switchNode.getBoundingClientRect();
+        routerX = routerRect.left - containerRect.left + routerRect.width / 2;
+        routerY = routerRect.top - containerRect.top + routerRect.height;
+        swX = swRect.left - containerRect.left + swRect.width / 2;
+        swY_top = swRect.top - containerRect.top;
 
         setRouterLine({
           x1: routerX,
@@ -90,9 +194,9 @@ function DashboardPage({ socket }) {
       }
 
       if (switchNode && clientNodes.length > 0) {
-        var swRect = switchNode.getBoundingClientRect();
-        var swX = swRect.left - containerRect.left + swRect.width / 2;
-        var swY_bottom = swRect.top - containerRect.top + swRect.height;
+        swRect = switchNode.getBoundingClientRect();
+        swX = swRect.left - containerRect.left + swRect.width / 2;
+        swY_bottom = swRect.top - containerRect.top + swRect.height;
 
         var newLines = Array.from(clientNodes).map(function (node) {
           var cRect = node.getBoundingClientRect();
@@ -128,9 +232,8 @@ function DashboardPage({ socket }) {
 
   async function fetchStats() {
     try {
-      var token = localStorage.getItem('token');
       var response = await axios.get(`${API_BASE_URL}/api/pelanggan/stats`, {
-        headers: { Authorization: 'Bearer ' + token }
+        headers: headers
       });
       if (response.data.success) {
         setStats(response.data.data);
@@ -144,8 +247,6 @@ function DashboardPage({ socket }) {
 
   async function fetchRouterInfo() {
     try {
-      var token = localStorage.getItem('token');
-      var headers = { Authorization: 'Bearer ' + token };
       var statusRes = await axios.get(`${API_BASE_URL}/api/mikrotik/status`, { headers: headers });
       setRouterStatus(statusRes.data.data);
     } catch (err) {
@@ -155,9 +256,8 @@ function DashboardPage({ socket }) {
 
   async function fetchCustomers() {
     try {
-      var token = localStorage.getItem('token');
       var response = await axios.get(`${API_BASE_URL}/api/pelanggan`, {
-        headers: { Authorization: 'Bearer ' + token }
+        headers: headers
       });
       if (response.data.success) {
         setCustomers(response.data.data);
@@ -167,59 +267,29 @@ function DashboardPage({ socket }) {
     }
   }
 
-  var statCards = [
-    {
-      label: 'Total Pelanggan Aktif',
-      value: stats.total_aktif,
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M16 19v-1a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v1" />
-          <circle cx="10" cy="7" r="3" />
-          <path d="M17 8a2.5 2.5 0 1 0 0 5" />
-          <path d="M19 13v1" />
-        </svg>
-      ),
-      iconClass: 'primary',
-      delay: 'stagger-1'
-    },
-    {
-      label: 'Lunas / Hijau',
-      value: stats.hijau,
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 6 9 17l-5-5" />
-        </svg>
-      ),
-      iconClass: 'success',
-      delay: 'stagger-2'
-    },
-    {
-      label: 'Mendekati Jatuh Tempo',
-      value: stats.kuning,
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
-          <path d="M12 9v4" />
-          <path d="M12 17h.01" />
-        </svg>
-      ),
-      iconClass: 'warning',
-      delay: 'stagger-3'
-    },
-    {
-      label: 'Menunggak',
-      value: stats.merah,
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10" />
-          <path d="M15 9 9 15" />
-          <path d="m9 9 6 6" />
-        </svg>
-      ),
-      iconClass: 'danger',
-      delay: 'stagger-4'
+  var handleExportExcel = async function() {
+    var today = new Date();
+    var currentMonthStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+    try {
+      var response = await axios.get(API_BASE_URL + '/api/reports/export-excel?periode=' + currentMonthStr, {
+        headers: headers,
+        responseType: 'blob'
+      });
+
+      var blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'Laporan_Keuangan_ESP_' + currentMonthStr + '.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      alert('Gagal mendownload laporan: ' + err.message);
     }
-  ];
+  };
 
   // Grouping customers for the topology display
   var activeCustomers = customers.filter(c => c.pppoe_status === 'active');
@@ -228,113 +298,84 @@ function DashboardPage({ socket }) {
 
   var routerBadgeClass = routerStatus.online ? 'healthy' : 'danger';
 
+  // Compute Pelanggan Baru (bulan ini)
+  var today = new Date();
+  var currentMonthStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+  var newCustomersCount = customers.filter(function (c) {
+    return c.created_at && c.created_at.substring(0, 7) === currentMonthStr;
+  }).length;
+
+  // Ring overdue count
+  var overdueCount = stats.merah || 0;
+
   return (
-    <div>
+    <div style={{ fontFamily: "'Hanken Grotesk', sans-serif" }}>
       <style>{`
         .dashboard-shell {
           display: flex;
           flex-direction: column;
-          gap: 20px;
+          gap: 24px;
+          margin-top: -50px; /* Offset overlapping cards upward onto the hero banner */
+          position: relative;
+          z-index: 10;
         }
 
-        .dashboard-hero {
+        .dashboard-hero-atlantis {
+          background: var(--primary-dark);
+          border-radius: 0;
+          margin-left: -32px;
+          margin-right: -32px;
+          margin-top: -28px;
+          padding: 40px 48px 90px 48px; /* High bottom padding for cards overlay */
+          color: white;
           display: flex;
           justify-content: space-between;
-          align-items: flex-start;
+          align-items: center;
           gap: 20px;
-          background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
-          border: 1px solid var(--border-color);
-          border-radius: var(--radius-xl);
-          padding: 24px 28px;
-          box-shadow: var(--shadow-sm);
+          flex-wrap: wrap;
+          margin-bottom: 0px;
+          box-shadow: var(--shadow-md);
         }
 
-        .dashboard-hero h1 {
-          font-size: 1.7rem;
+        .dashboard-hero-atlantis h1 {
+          font-size: 2.1rem;
           font-weight: 800;
-          color: var(--text-primary);
-          margin-bottom: 8px;
+          color: #ffffff;
+          margin-bottom: 6px;
           letter-spacing: -0.02em;
-          font-family: 'Open Sans', sans-serif;
         }
 
-        .dashboard-hero p {
-          color: var(--text-secondary);
-          max-width: 700px;
-          line-height: 1.6;
+        .dashboard-hero-atlantis p {
+          color: rgba(255, 255, 255, 0.82);
+          max-width: 600px;
+          line-height: 1.5;
           font-size: 0.95rem;
         }
 
-        .hero-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 6px 10px;
-          border-radius: 5px;
-          background: var(--primary-glow);
-          color: var(--primary);
-          font-size: 0.74rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          margin-bottom: 10px;
-        }
-
-        .hero-badge::before {
-          content: '';
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background: var(--primary);
-          display: inline-block;
-        }
-
-        .dashboard-hero-stats {
+        .overlapping-grid-cards {
           display: grid;
-          grid-template-columns: repeat(3, minmax(110px, 1fr));
-          gap: 10px;
-          min-width: 320px;
+          grid-template-columns: 1fr 1fr;
+          gap: 24px;
+          padding: 0 4px;
         }
 
-        .dashboard-hero-stat {
-          background: var(--bg-card);
-          border: 1px solid var(--border-color);
-          border-radius: var(--radius-md);
-          padding: 12px 14px;
-        }
-
-        .dashboard-hero-stat small {
-          display: block;
-          color: var(--text-muted);
-          font-size: 0.72rem;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          margin-bottom: 4px;
-        }
-
-        .dashboard-hero-stat strong {
-          font-size: 1rem;
-          color: var(--text-primary);
-          font-weight: 700;
-        }
-
-        .stat-card-icon svg {
-          width: 20px;
-          height: 20px;
-          stroke: currentColor;
+        .trend-summary-grid {
+          display: grid;
+          grid-template-columns: 1.3fr 0.7fr;
+          gap: 24px;
         }
 
         .overview-grid {
           display: grid;
-          grid-template-columns: 1.25fr 0.75fr;
-          gap: 20px;
+          grid-template-columns: 1.1fr 0.9fr;
+          gap: 24px;
         }
 
         .panel-card {
           background: var(--bg-card);
           border: 1px solid var(--border-color);
           border-radius: var(--radius-lg);
-          padding: 20px;
+          padding: 24px;
           box-shadow: var(--shadow-sm);
         }
 
@@ -342,7 +383,7 @@ function DashboardPage({ socket }) {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 16px;
+          margin-bottom: 20px;
           gap: 12px;
         }
 
@@ -350,8 +391,8 @@ function DashboardPage({ socket }) {
           display: flex;
           align-items: center;
           gap: 8px;
-          font-size: 1rem;
-          font-weight: 700;
+          font-size: 1.05rem;
+          font-weight: 800;
           color: var(--text-primary);
         }
 
@@ -359,33 +400,32 @@ function DashboardPage({ socket }) {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 32px;
-          height: 32px;
+          width: 34px;
+          height: 34px;
           border-radius: var(--radius-md);
           background: var(--primary-glow);
           color: var(--primary);
           flex-shrink: 0;
         }
 
-        .panel-card-icon svg {
-          width: 16px;
-          height: 16px;
-          stroke: currentColor;
+        .panel-card-icon span {
+          font-size: 1.25rem;
         }
 
         .panel-card-subtitle {
-          font-size: 0.78rem;
+          font-size: 0.8rem;
           color: var(--text-muted);
           margin-top: 2px;
+          font-weight: 500;
         }
 
         .status-pill {
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          padding: 6px 10px;
-          border-radius: 5px;
-          font-size: 0.75rem;
+          padding: 6px 12px;
+          border-radius: 30px;
+          font-size: 0.78rem;
           font-weight: 700;
           white-space: nowrap;
         }
@@ -400,14 +440,9 @@ function DashboardPage({ socket }) {
           color: var(--status-merah);
         }
 
-        .status-pill.warning {
-          background: var(--status-kuning-bg);
-          color: var(--status-kuning);
-        }
-
         .router-grid {
           display: grid;
-          gap: 10px;
+          gap: 12px;
         }
 
         .router-row {
@@ -425,19 +460,21 @@ function DashboardPage({ socket }) {
 
         .router-row span {
           color: var(--text-secondary);
-          font-size: 0.86rem;
+          font-size: 0.88rem;
+          font-weight: 600;
         }
 
         .router-row strong {
           color: var(--text-primary);
-          font-size: 0.86rem;
+          font-size: 0.88rem;
+          font-weight: 700;
           text-align: right;
         }
 
         .activity-list {
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap: 12px;
         }
 
         .activity-item {
@@ -455,12 +492,14 @@ function DashboardPage({ socket }) {
 
         .activity-item span {
           color: var(--text-secondary);
-          font-size: 0.86rem;
+          font-size: 0.88rem;
+          font-weight: 600;
         }
 
         .activity-item strong {
           color: var(--text-primary);
-          font-size: 0.86rem;
+          font-size: 0.88rem;
+          font-weight: 700;
         }
 
         .topology-card {
@@ -473,7 +512,7 @@ function DashboardPage({ socket }) {
           flex-direction: column;
           align-items: center;
           gap: 20px;
-          padding: 20px 0;
+          padding: 24px 0;
           min-height: 440px;
           position: relative;
           background-image: radial-gradient(var(--border-color-light) 1px, transparent 1px);
@@ -516,21 +555,6 @@ function DashboardPage({ socket }) {
           transform: translateY(-4px);
         }
 
-        .node-icon-wrapper {
-          width: 68px;
-          height: 68px;
-          border-radius: var(--radius-xl);
-          background: var(--bg-tertiary);
-          border: 2px solid var(--border-color);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 8px;
-          position: relative;
-          transition: all 0.3s ease;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
-        }
-
         .node-label {
           font-size: 0.78rem;
           font-weight: 700;
@@ -556,14 +580,6 @@ function DashboardPage({ socket }) {
           pointer-events: none;
           z-index: 1;
           overflow: visible;
-        }
-
-        .topology-connector {
-          fill: none;
-          stroke-width: 2.4;
-          stroke-linecap: round;
-          stroke-linejoin: round;
-          filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.08));
         }
 
         .status-dot-pulse {
@@ -597,396 +613,111 @@ function DashboardPage({ socket }) {
           70% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(186, 26, 26, 0); }
           100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(186, 26, 26, 0); }
         }
-
-        /* Cisco Packet Tracer Styled Topology Map Styles */
-        .topology-header-tabs {
-          display: flex;
-          gap: 4px;
-          background: var(--bg-secondary);
-          padding: 3px;
-          border-radius: var(--radius-md);
-          border: 1px solid var(--border-color);
-        }
-
-        .topology-tab-btn {
-          background: transparent;
-          border: none;
-          color: var(--text-secondary);
-          font-size: 0.8rem;
-          font-weight: 600;
-          padding: 6px 12px;
-          border-radius: var(--radius-sm);
-          cursor: pointer;
-          transition: all var(--transition-fast);
-        }
-
-        .topology-tab-btn.active {
-          background: var(--bg-card);
-          color: var(--primary);
-          box-shadow: var(--shadow-sm);
-        }
-
-        .topology-canvas-wrapper {
-          width: 100%;
-          overflow-x: auto;
-          border: 1px solid var(--border-color-light);
-          border-radius: var(--radius-lg);
-          background-color: #fcfdfe;
-          background-image: radial-gradient(#cbd5e1 1.2px, transparent 1.2px);
-          background-size: 24px 24px;
-          margin-top: 10px;
-          -webkit-overflow-scrolling: touch;
-        }
-
-        .topology-canvas {
-          position: relative;
-          width: 800px;
-          height: 440px;
-        }
-
-        .cisco-node {
-          position: absolute;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          text-align: center;
-          cursor: pointer;
-          user-select: none;
-          transition: transform 0.2s ease;
-          width: 120px;
-          z-index: 5;
-        }
-
-        .cisco-node:hover {
-          transform: scale(1.05);
-        }
-
-        .cisco-node-icon {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          height: 60px;
-          width: 80px;
-          position: relative;
-        }
-
-        .cisco-labels {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          margin-top: 4px;
-          font-family: 'Consolas', 'Courier New', monospace;
-        }
-
-        .cisco-label-model {
-          font-size: 0.72rem;
-          color: #475569;
-          font-weight: 500;
-        }
-
-        .cisco-label-name {
-          font-size: 0.76rem;
-          color: #0f172a;
-          font-weight: 700;
-          margin-top: -2px;
-        }
-
-        .cisco-label-ip {
-          font-size: 0.7rem;
-          color: #1e293b;
-          background: #ffffff;
-          border: 1px solid #cbd5e1;
-          padding: 1px 4px;
-          border-radius: 5px;
-          margin-top: 3px;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-        }
-
-        .ping-packet-dot {
-          position: absolute;
-          width: 14px;
-          height: 14px;
-          border-radius: 50%;
-          border: 2px solid #ffffff;
-          box-shadow: 0 0 12px rgba(0,0,0,0.3);
-          pointer-events: none;
-          z-index: 10;
-          transform: translate(-50%, -50%);
-          transition: left 450ms linear, top 450ms linear;
-        }
-
-        .ping-packet-dot.request {
-          background: #f59e0b;
-          box-shadow: 0 0 12px #f59e0b;
-        }
-
-        .ping-packet-dot.reply {
-          background: #06b6d4;
-          box-shadow: 0 0 12px #06b6d4;
-        }
-
-        /* Terminal Console styles */
-        .topology-terminal-panel {
-          background: #0b0f19;
-          border: 1px solid #1e293b;
-          border-radius: var(--radius-lg);
-          margin-top: 15px;
-          overflow: hidden;
-          font-family: 'Consolas', 'Courier New', monospace;
-          box-shadow: var(--shadow-md);
-        }
-
-        .terminal-header {
-          background: #141b2d;
-          padding: 8px 16px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          border-bottom: 1px solid #1e293b;
-        }
-
-        .terminal-title {
-          color: #94a3b8;
-          font-size: 0.8rem;
-          font-weight: 600;
-          letter-spacing: 0.05em;
-        }
-
-        .terminal-close-btn {
-          background: transparent;
-          border: none;
-          color: #64748b;
-          font-size: 1.2rem;
-          cursor: pointer;
-          transition: color var(--transition-fast);
-        }
-
-        .terminal-close-btn:hover {
-          color: #ef4444;
-        }
-
-        .terminal-body {
-          padding: 16px;
-          display: flex;
-          flex-direction: column;
-          gap: 15px;
-        }
-
-        .terminal-logs {
-          background: #020612;
-          border: 1px solid #1e293b;
-          border-radius: var(--radius-md);
-          padding: 12px;
-          height: 180px;
-          overflow-y: auto;
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-
-        .terminal-log-line {
-          color: #f1f5f9;
-          font-size: 0.82rem;
-          line-height: 1.4;
-          white-space: pre-wrap;
-        }
-
-        .terminal-cursor-line {
-          display: flex;
-          align-items: center;
-        }
-
-        .cursor-indicator {
-          display: inline-block;
-          width: 8px;
-          height: 14px;
-          background: #38bdf8;
-          animation: blink 1s step-end infinite;
-        }
-
-        @keyframes blink {
-          50% { opacity: 0; }
-        }
-
-        .terminal-controls {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-
-        .terminal-actions {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex-wrap: wrap;
-        }
-
-        .terminal-actions span {
-          color: #94a3b8;
-          font-size: 0.82rem;
-        }
-
-        @keyframes pulse-border-red {
-          0% { border-color: rgba(186, 26, 26, 0.4); }
-          50% { border-color: rgba(186, 26, 26, 1); }
-          100% { border-color: rgba(186, 26, 26, 0.4); }
-        }
       `}</style>
 
-      <div className="page-header">
+      {/* Hero Banner Section */}
+      <section className="dashboard-hero-atlantis animate-fadeIn">
         <div>
-          <h1>Dashboard</h1>
-          <p>Selamat datang kembali! Berikut ringkasan aktivitas pelanggan dan status jaringan.</p>
+          <h1>Dashboard Admin</h1>
+          <p>Ringkasan operasional layanan internet hari ini. Monitor status perangkat gateway Mikrotik, tagihan pelanggan, dan rekapan pembayaran secara real-time.</p>
         </div>
-      </div>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <Link to="/dashboard/pelanggan" className="btn btn-secondary" style={{
+            background: 'transparent',
+            border: '1.5px solid rgba(255,255,255,0.4)',
+            color: 'white',
+            fontWeight: '700'
+          }}
+          onMouseEnter={function(e) {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+          }}
+          onMouseLeave={function(e) {
+            e.currentTarget.style.background = 'transparent';
+          }}
+          >
+            Kelola Pelanggan
+          </Link>
+          <Link to="/dashboard/pelanggan?action=tambah" className="btn btn-primary" style={{
+            background: 'var(--md-primary-fixed)',
+            color: 'var(--md-on-primary-fixed-variant)',
+            fontWeight: '700'
+          }}>
+            + Tambah Pelanggan
+          </Link>
+        </div>
+      </section>
 
+      {/* Shell wrapping the dashboard items */}
       <div className="dashboard-shell">
-        <section className="dashboard-hero animate-fadeIn">
-          <div>
-            <div className="hero-badge">Realtime Monitoring</div>
-            <h1>Ringkasan operasi jaringan</h1>
-            <p>Monitor koneksi PPPoE, status router, dan pelanggan aktif dari satu tampilan yang lebih rapi dan mudah dibaca.</p>
+        
+        {/* Overlapping Stat Cards Row */}
+        <div className="overlapping-grid-cards">
+          {/* Card "Statistik Keseluruhan" (Circular Rings) */}
+          <div className="card glass-card animate-fadeIn" style={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            padding: '24px',
+            minHeight: '200px'
+          }}>
+            <div style={{
+              fontSize: '0.8rem',
+              fontWeight: '700',
+              color: 'var(--text-muted)',
+              marginBottom: '18px',
+              fontFamily: "'Hanken Grotesk', sans-serif"
+            }}>
+              Statistik Keseluruhan Bulan Ini
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
+              <StatRing value={newCustomersCount} max={Math.max(10, newCustomersCount)} label="Pelanggan Baru" color="var(--primary-light)" />
+              <StatRing value={verifiedCount} max={Math.max(10, verifiedCount)} label="Pembayaran Lunas" color="var(--primary)" />
+              <StatRing value={overdueCount} max={Math.max(5, overdueCount)} label="Jatuh Tempo" color="var(--status-merah)" />
+            </div>
           </div>
-          <div className="dashboard-hero-stats">
-            <div className="dashboard-hero-stat">
-              <small>Router</small>
-              <strong>{routerStatus.online ? 'Online' : 'Offline'}</strong>
-            </div>
-            <div className="dashboard-hero-stat">
-              <small>Sesi aktif</small>
-              <strong>{pppoeSummary.active_count}</strong>
-            </div>
-            <div className="dashboard-hero-stat">
-              <small>Perlu cek</small>
-              <strong>{pppoeSummary.unregistered_count}</strong>
-            </div>
-          </div>
-        </section>
 
-        <div className="stats-grid">
-          {statCards.map(function (card, idx) {
-            return (
-              <div className={'stat-card ' + card.delay} key={idx} style={{ animationDelay: (idx * 0.08) + 's' }}>
-                <div className="stat-card-info">
-                  <h3>{card.label}</h3>
-                  <div className="stat-number">
-                    {loading ? (
-                      <div className="skeleton skeleton-text lg"></div>
-                    ) : (
-                      card.value
-                    )}
-                  </div>
-                </div>
-                <div className={'stat-card-icon ' + card.iconClass}>
-                  {card.icon}
-                </div>
-              </div>
-            );
-          })}
+          {/* Card "Pemasukan & Pengeluaran" */}
+          <IncomeSpendCard
+            totalIncome={summary.total_pemasukan}
+            totalSpend={summary.total_pengeluaran}
+            dailyData={miniBarData}
+            loading={loadingReports}
+          />
         </div>
 
-        <div className="overview-grid">
-          <div className="panel-card">
-            <div className="panel-card-header">
-              <div>
-                <div className="panel-card-title">
-                  <span className="panel-card-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="4" width="18" height="14" rx="2" />
-                      <path d="M8 20h8" />
-                      <path d="M12 18v2" />
-                    </svg>
-                  </span>
-                  <span>Status router & koneksi</span>
-                </div>
-                <div className="panel-card-subtitle">Informasi singkat dari Mikrotik</div>
-              </div>
-              <span className={'status-pill ' + routerBadgeClass}>
-                {routerStatus.online ? '● Online' : '● Offline'}
-              </span>
-            </div>
-            <div className="router-grid">
-              <div className="router-row">
-                <span>Model</span>
-                <strong>{routerStatus.online ? routerStatus.board : 'Tidak terhubung'}</strong>
-              </div>
-              <div className="router-row">
-                <span>Versi RouterOS</span>
-                <strong>{routerStatus.online ? routerStatus.version : routerStatus.error || '—'}</strong>
-              </div>
-              <div className="router-row">
-                <span>PPPoE aktif</span>
-                <strong>{pppoeSummary.active_count} sesi</strong>
-              </div>
-              <div className="router-row">
-                <span>Perlu verifikasi</span>
-                <strong>{pppoeSummary.unregistered_count} user</strong>
-              </div>
-            </div>
-          </div>
-
-          <div className="panel-card">
-            <div className="panel-card-header">
-              <div>
-                <div className="panel-card-title">
-                  <span className="panel-card-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M8 6h12" />
-                      <path d="M8 12h12" />
-                      <path d="M8 18h12" />
-                      <path d="M4 6h.01" />
-                      <path d="M4 12h.01" />
-                      <path d="M4 18h.01" />
-                    </svg>
-                  </span>
-                  <span>Aktivitas terbaru</span>
-                </div>
-                <div className="panel-card-subtitle">Riwayat singkat operasi</div>
-              </div>
-            </div>
-            <div className="activity-list">
-              <div className="activity-item">
-                <span>Pelanggan aktif</span>
-                <strong>{activeCustomers.length}</strong>
-              </div>
-              <div className="activity-item">
-                <span>Offline / terisolir</span>
-                <strong>{inactiveCustomers.length}</strong>
-              </div>
-              <div className="activity-item">
-                <span>Unregistered</span>
-                <strong>{unregisteredActive.length}</strong>
-              </div>
-            </div>
-          </div>
+        {/* Area Chart & Solid Today Summary Grid */}
+        <div className="trend-summary-grid">
+          <PaymentTrendChart
+            data={dailyTrend}
+            loading={loadingReports}
+            onExport={handleExportExcel}
+            onPrint={window.print}
+          />
+          <TodayPaymentSummary
+            value={todayPaymentsSum}
+            loading={loadingReports}
+          />
         </div>
 
+        {/* Cisco Network Topology Map */}
         <div className="topology-card panel-card animate-fadeIn" style={{ animationDelay: '0.15s' }}>
           <div className="panel-card-header">
             <div>
               <div className="panel-card-title">
                 <span className="panel-card-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="7" height="7" rx="1" />
-                    <rect x="14" y="3" width="7" height="7" rx="1" />
-                    <rect x="14" y="14" width="7" height="7" rx="1" />
-                    <path d="M10 7h2" />
-                    <path d="M10 17h2" />
-                    <path d="M7 10v2" />
-                    <path d="M17 10v2" />
-                  </svg>
+                  <span className="material-symbols-outlined">hub</span>
                 </span>
-                <span>Peta topologi jaringan</span>
+                <span>Peta Topologi Jaringan</span>
               </div>
               <div className="panel-card-subtitle">
-                Status session & perangkat terhubung real-time dari Mikrotik
+                Status session & perangkat terhubung real-time dari router gateway Mikrotik LDM
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '12px', fontSize: '0.78rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '8px', height: '8px', background: 'var(--success)', borderRadius: '50%' }} /> Aktif ({activeCustomers.length})</span>
+            <div style={{ display: 'flex', gap: '12px', fontSize: '0.78rem', flexWrap: 'wrap', justifyContent: 'flex-end', fontWeight: '600' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '8px', height: '8px', background: 'var(--status-hijau)', borderRadius: '50%' }} /> Aktif ({activeCustomers.length})</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '8px', height: '8px', background: 'var(--text-muted)', borderRadius: '50%' }} /> Nonaktif ({inactiveCustomers.length})</span>
               {unregisteredActive.length > 0 && (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '8px', height: '8px', background: 'var(--danger)', borderRadius: '50%', animation: 'pulse-red 1s infinite' }} /> Unregistered ({unregisteredActive.length})</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><span style={{ width: '8px', height: '8px', background: 'var(--status-merah)', borderRadius: '50%', animation: 'pulse-red 1s infinite' }} /> Unregistered ({unregisteredActive.length})</span>
               )}
             </div>
           </div>
@@ -1027,7 +758,7 @@ function DashboardPage({ socket }) {
 
             <div className="topology-row">
               {loading ? (
-                <div style={{ color: 'var(--text-muted)' }}>Memetakan perangkat klien...</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Memetakan perangkat klien...</div>
               ) : (
                 <div className="topology-endpoints-grid">
                   {activeCustomers.map(function (cust) {
@@ -1076,6 +807,75 @@ function DashboardPage({ socket }) {
             </div>
           </div>
         </div>
+
+        {/* Lower Row Grid: Router Specs & Recent Stats */}
+        <div className="overview-grid">
+          {/* Card: Status router & koneksi */}
+          <div className="panel-card">
+            <div className="panel-card-header">
+              <div>
+                <div className="panel-card-title">
+                  <span className="panel-card-icon">
+                    <span className="material-symbols-outlined">dns</span>
+                  </span>
+                  <span>Status Router & Koneksi Gateway</span>
+                </div>
+                <div className="panel-card-subtitle">Detail status operasional perangkat RouterOS Mikrotik</div>
+              </div>
+              <span className={'status-pill ' + routerBadgeClass} style={{ fontWeight: '700' }}>
+                {routerStatus.online ? '● Online' : '● Offline'}
+              </span>
+            </div>
+            <div className="router-grid">
+              <div className="router-row">
+                <span>Model Perangkat</span>
+                <strong>{routerStatus.online ? routerStatus.board : 'Tidak terhubung'}</strong>
+              </div>
+              <div className="router-row">
+                <span>Versi RouterOS</span>
+                <strong>{routerStatus.online ? routerStatus.version : routerStatus.error || '—'}</strong>
+              </div>
+              <div className="router-row">
+                <span>PPPoE Sesi Aktif</span>
+                <strong>{pppoeSummary.active_count} Sesi Online</strong>
+              </div>
+              <div className="router-row">
+                <span>Membutuhkan Verifikasi</span>
+                <strong>{pppoeSummary.unregistered_count} Klien</strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Card: Aktivitas terbaru */}
+          <div className="panel-card">
+            <div className="panel-card-header">
+              <div>
+                <div className="panel-card-title">
+                  <span className="panel-card-icon">
+                    <span className="material-symbols-outlined">history</span>
+                  </span>
+                  <span>Aktivitas & Riwayat Operasi</span>
+                </div>
+                <div className="panel-card-subtitle">Ringkasan status log session & client onboarding</div>
+              </div>
+            </div>
+            <div className="activity-list">
+              <div className="activity-item">
+                <span>Klien Terdaftar Aktif</span>
+                <strong>{activeCustomers.length} Pelanggan</strong>
+              </div>
+              <div className="activity-item">
+                <span>Klien Offline / Terisolir</span>
+                <strong>{inactiveCustomers.length} Pelanggan</strong>
+              </div>
+              <div className="activity-item">
+                <span>Klien Unregistered</span>
+                <strong>{unregisteredActive.length} Perangkat</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
@@ -1087,25 +887,13 @@ function DashboardPage({ socket }) {
 
 function CiscoRouterIcon({ width = 60, height = 40, online = true }) {
   var topColorStart = online ? "#4ba3e3" : "#cbd5e1";
-  var topColorEnd = online ? "#1b75bb" : "#94a3b8";
   var bodyColorStart = online ? "#1266a5" : "#64748b";
-  var bodyColorEnd = online ? "#0c4b7a" : "#475569";
   var strokeColor = online ? "#175e96" : "#475569";
   
   return (
     <svg width={width} height={height} viewBox="0 0 80 50" style={{ overflow: 'visible' }}>
-      <defs>
-        <linearGradient id={`routerTopGrad-${online}`} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor={topColorStart} />
-          <stop offset="100%" stopColor={topColorEnd} />
-        </linearGradient>
-        <linearGradient id={`routerBodyGrad-${online}`} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor={bodyColorStart} />
-          <stop offset="100%" stopColor={bodyColorEnd} />
-        </linearGradient>
-      </defs>
-      <path d="M 5,20 L 5,38 A 35,12 0 0 0 75,38 L 75,20 Z" fill={`url(#routerBodyGrad-${online})`} stroke={strokeColor} strokeWidth="1" />
-      <ellipse cx="40" cy="20" rx="35" ry="12" fill={`url(#routerTopGrad-${online})`} stroke={strokeColor} strokeWidth="1" />
+      <path d="M 5,20 L 5,38 A 35,12 0 0 0 75,38 L 75,20 Z" fill={bodyColorStart} stroke={strokeColor} strokeWidth="1" />
+      <ellipse cx="40" cy="20" rx="35" ry="12" fill={topColorStart} stroke={strokeColor} strokeWidth="1" />
       <ellipse cx="40" cy="20" rx="35" ry="12" fill="none" stroke="#ffffff" strokeWidth="1.5" style={{ opacity: 0.3 }} />
       
       {/* 4 Arrows on top */}
@@ -1123,27 +911,14 @@ function CiscoRouterIcon({ width = 60, height = 40, online = true }) {
 
 function CiscoSwitchIcon({ width = 70, height = 40, online = true }) {
   var topStart = online ? "#3d8ec7" : "#cbd5e1";
-  var topEnd = online ? "#1e6b9e" : "#94a3b8";
   var frontStart = online ? "#185987" : "#64748b";
-  var frontEnd = online ? "#0c3d5f" : "#475569";
   var sideColor = online ? "#154e77" : "#334155";
   var strokeColor = online ? "#09273d" : "#334155";
 
   return (
     <svg width={width} height={height} viewBox="0 0 80 46" style={{ overflow: 'visible' }}>
-      <defs>
-        <linearGradient id={`switchTopGrad-${online}`} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor={topStart} />
-          <stop offset="100%" stopColor={topEnd} />
-        </linearGradient>
-        <linearGradient id={`switchFrontGrad-${online}`} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor={frontStart} />
-          <stop offset="100%" stopColor={frontEnd} />
-        </linearGradient>
-      </defs>
-      
-      <path d="M 15,10 L 55,10 L 68,20 L 28,20 Z" fill={`url(#switchTopGrad-${online})`} stroke={strokeColor} strokeWidth="0.75" />
-      <path d="M 28,20 L 68,20 L 68,34 L 28,34 Z" fill={`url(#switchFrontGrad-${online})`} stroke={strokeColor} strokeWidth="0.75" />
+      <path d="M 15,10 L 55,10 L 68,20 L 28,20 Z" fill={topStart} stroke={strokeColor} strokeWidth="0.75" />
+      <path d="M 28,20 L 68,20 L 68,34 L 28,34 Z" fill={frontStart} stroke={strokeColor} strokeWidth="0.75" />
       <path d="M 15,10 L 28,20 L 28,34 L 15,24 Z" fill={sideColor} stroke={strokeColor} strokeWidth="0.75" />
       
       {/* Port Grid */}
@@ -1177,37 +952,19 @@ function CiscoSwitchIcon({ width = 70, height = 40, online = true }) {
 
 function CiscoPCIcon({ width = 50, height = 42, online = true }) {
   var screenColorStart = online ? "#a0c4ff" : "#cbd5e1";
-  var screenColorEnd = online ? "#4a90e2" : "#94a3b8";
   var bezelStart = "#f1f5f9";
-  var bezelEnd = "#cbd5e1";
   var towerColorStart = "#cbd5e1";
-  var towerColorEnd = "#94a3b8";
   var keyColor = online ? "#22c55e" : "#64748b";
 
   return (
     <svg width={width} height={height} viewBox="0 0 60 50" style={{ overflow: 'visible' }}>
-      <defs>
-        <linearGradient id={`pcScreen-${online}`} x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor={screenColorStart} />
-          <stop offset="100%" stopColor={screenColorEnd} />
-        </linearGradient>
-        <linearGradient id="pcBezel" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor={bezelStart} />
-          <stop offset="100%" stopColor={bezelEnd} />
-        </linearGradient>
-        <linearGradient id="pcTower" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor={towerColorStart} />
-          <stop offset="100%" stopColor={towerColorEnd} />
-        </linearGradient>
-      </defs>
-      
-      <rect x="43" y="10" width="11" height="28" rx="1" fill="url(#pcTower)" stroke="#475569" strokeWidth="0.5" />
+      <rect x="43" y="10" width="11" height="28" rx="1" fill={towerColorStart} stroke="#475569" strokeWidth="0.5" />
       <line x1="45" y1="13" x2="52" y2="13" stroke="#475569" strokeWidth="1.2" />
       <line x1="45" y1="16" x2="52" y2="16" stroke="#475569" strokeWidth="1.2" />
       <circle cx="48" cy="30" r="1.5" fill={keyColor} />
       
-      <rect x="6" y="8" width="34" height="24" rx="2" fill="url(#pcBezel)" stroke="#475569" strokeWidth="0.75" />
-      <rect x="9" y="11" width="28" height="18" rx="0.5" fill={`url(#pcScreen-${online})`} stroke="#1e40af" strokeWidth="0.5" />
+      <rect x="6" y="8" width="34" height="24" rx="2" fill={bezelStart} stroke="#475569" strokeWidth="0.75" />
+      <rect x="9" y="11" width="28" height="18" rx="0.5" fill={screenColorStart} stroke="#1e40af" strokeWidth="0.5" />
       <path d="M 9,11 L 28,11 L 9,23 Z" fill="#ffffff" style={{ opacity: 0.15 }} />
       
       <path d="M 21,32 L 25,32 L 26,37 L 20,37 Z" fill="#64748b" stroke="#475569" strokeWidth="0.5" />

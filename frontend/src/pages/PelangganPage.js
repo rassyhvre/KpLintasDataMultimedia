@@ -34,6 +34,12 @@ function PelangganPage({ socket }) {
     fetchPaket();
     fetchPppoeSecrets();
 
+    // Auto-open Add Customer modal if action=tambah query is present
+    var query = new URLSearchParams(window.location.search);
+    if (query.get('action') === 'tambah') {
+      openAddModal();
+    }
+
     if (socket) {
       socket.on('pelanggan_updated', function (data) {
         setPelanggan(function (prevList) {

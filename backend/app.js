@@ -18,6 +18,7 @@ var customerPortalRouter = require('./routes/customerPortal');
 var pembayaranRouter = require('./routes/pembayaran');
 var pengeluaranRouter = require('./routes/pengeluaran');
 var reportsRouter = require('./routes/reports');
+var notifikasiRouter = require('./routes/notifikasi');
 
 // Database Connection
 var db = require('./config/db');
@@ -64,6 +65,7 @@ app.use('/api/customer/portal', customerPortalRouter);
 app.use('/api/pembayaran', pembayaranRouter);
 app.use('/api/pengeluaran', pengeluaranRouter);
 app.use('/api/reports', reportsRouter);
+app.use('/api/notifikasi', notifikasiRouter);
 
 // Start Cron Service
 var cronService = require('./services/cronService');

@@ -42,6 +42,14 @@ function LaporanPage() {
     setIncomePage(1);
   }, [periode]);
 
+  useEffect(function () {
+    var query = new URLSearchParams(window.location.search);
+    if (query.get('action') === 'pengeluaran') {
+      resetForm();
+      setShowAddModal(true);
+    }
+  }, []);
+
   async function fetchData() {
     setLoading(true);
     setChartLoading(true);

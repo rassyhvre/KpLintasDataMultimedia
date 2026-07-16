@@ -327,4 +327,75 @@ router.get('/yearly-chart', function(req, res) {
   });
 });
 
+/* GET /api/reports/daily-trend - Get daily bill issuance and payment collections for a month */
+router.get('/daily-trend', function(req, res) {
+  var { periode } = req.query;
+  if (!periode) {
+    var today = new Date();
+    var y = today.getFullYear();
+    var m = today.getMonth() + 1;
+    periode = y + '-' + (m < 10 ? '0' + m : m);
+  }
+
+  var parts = periode.split('-');
+  var year = parseInt(parts[0], 10);
+  var month = parseInt(parts[1], 10);
+  var daysInMonth = new Date(year, month, 0).getDate();
+
+  var issuedSql = `
+    SELECT 
+      DAY(created_at) as hari,
+      COALESCE(SUM(nominal), 0) as total
+    FROM tagihan
+    WHERE DATE_FORMAT(created_at, '%Y-%m') = ?
+    GROUP BY hari
+  `;
+
+  var collectedSql = `
+    SELECT 
+      DAY(updated_at) as hari,
+      COALESCE(SUM(nominal), 0) as total
+    FROM tagihan
+    WHERE status = 'lunas' AND DATE_FORMAT(updated_at, '%Y-%m') = ?
+    GROUP BY hari
+  `;
+
+  db.query(issuedSql, [periode], function(err, issuedRows) {
+    if (err) {
+      console.error('[Daily Trend API] Error fetching issued bills:', err.message);
+      return res.status(500).json({ success: false, message: 'Gagal mengambil data tagihan terbit harian.' });
+    }
+
+    db.query(collectedSql, [periode], function(err2, collectedRows) {
+      if (err2) {
+        console.error('[Daily Trend API] Error fetching collected payments:', err2.message);
+        return res.status(500).json({ success: false, message: 'Gagal mengambil data pembayaran masuk harian.' });
+      }
+
+      var issuedMap = {};
+      issuedRows.forEach(function(r) { issuedMap[r.hari] = parseFloat(r.total); });
+
+      var collectedMap = {};
+      collectedRows.forEach(function(r) { collectedMap[r.hari] = parseFloat(r.total); });
+
+      var dailyData = [];
+      for (var d = 1; d <= daysInMonth; d++) {
+        dailyData.push({
+          day: d,
+          tagihan: issuedMap[d] || 0,
+          pembayaran: collectedMap[d] || 0
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          periode: periode,
+          days: dailyData
+        }
+      });
+    });
+  });
+});
+
 module.exports = router;

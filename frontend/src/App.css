@@ -1994,3 +1994,64 @@
     gap: 32px;
   }
 }
+
+/* ============================================
+   Redesign Overrides & Additions (Atlantis Admin template)
+   ============================================ */
+
+/* Collapsible sidebar layout overrides */
+.app-layout.sidebar-collapsed .sidebar {
+  width: var(--sidebar-collapsed) !important;
+}
+
+.app-layout.sidebar-collapsed .app-main {
+  margin-left: var(--sidebar-collapsed) !important;
+}
+
+.app-layout.sidebar-collapsed .topbar {
+  left: var(--sidebar-collapsed) !important;
+}
+
+.sidebar {
+  transition: width var(--transition-normal) !important;
+}
+
+.app-main {
+  transition: margin-left var(--transition-normal) !important;
+}
+
+/* Helper for desktop-only flex elements */
+@media (min-width: 768px) {
+  .desktop-only-flex {
+    display: flex !important;
+  }
+}
+
+/* Material symbols adjustments */
+.material-symbols-outlined {
+  font-display: block;
+}
+
+/* Glass card styling additions */
+.glass-card {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(0, 104, 118, 0.08) !important;
+}
+
+/* Custom chart tooltip styles */
+.chart-tooltip {
+  transition: left 0.15s ease, top 0.15s ease;
+}
+
+/* Custom scrollbar for sidebar and dropdowns */
+.sidebar::-webkit-scrollbar,
+.animate-fadeIn::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar::-webkit-scrollbar-thumb,
+.animate-fadeIn::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}

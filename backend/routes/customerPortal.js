@@ -428,6 +428,13 @@ router.post('/pay', function (req, res) {
           return res.status(500).json({ success: false, message: 'Gagal mencatat pembayaran.', error: err.message });
         }
 
+        // Insert into notifikasi table to track payment pending notification
+        db.query("INSERT INTO notifikasi (id_pembayaran) VALUES (?)", [paymentResult.insertId], function(notifErr) {
+          if (notifErr) {
+            console.error('[Notification Trigger] Failed to insert notification record:', notifErr.message);
+          }
+        });
+
         // 2. Update tagihan status to 'menunggu_verifikasi'
         var updateSql = "UPDATE tagihan SET status = 'menunggu_verifikasi' WHERE id_tagihan = ?";
         db.query(updateSql, [id_tagihan], function (err) {

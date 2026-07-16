@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import HeroSplineScene from '../components/HeroSplineScene';
+import HeroSplineScene from '../components/landing/HeroSplineScene';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
 

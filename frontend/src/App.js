@@ -32,6 +32,7 @@ function App() {
 
   var [loading, setLoading] = useState(true);
   var [socket, setSocket] = useState(null);
+  var [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Check URL pathname to determine if it is admin dashboard flow
   var isAdminRoute = window.location.pathname.startsWith('/dashboard') || window.location.pathname.startsWith('/login');
@@ -167,9 +168,9 @@ function App() {
     }
 
     return (
-      <div className="app-layout">
-        <Sidebar admin={admin} onLogout={handleLogout} />
-        <Navbar />
+      <div className={'app-layout' + (sidebarCollapsed ? ' sidebar-collapsed' : '')}>
+        <Sidebar admin={admin} onLogout={handleLogout} socket={socket} collapsed={sidebarCollapsed} />
+        <Navbar admin={admin} onLogout={handleLogout} socket={socket} onToggleSidebar={function() { setSidebarCollapsed(!sidebarCollapsed); }} collapsed={sidebarCollapsed} />
         <main className="app-main">
           <div className="app-content">
             <Routes>
