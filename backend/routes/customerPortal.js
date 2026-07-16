@@ -174,11 +174,30 @@ router.post('/midtrans-callback', function (req, res) {
                     year: 'numeric'
                   });
 
+                  var tglBayarStr = new Date().toLocaleString('id-ID', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  });
+                  var metodeMap = {
+                    'bank_transfer': 'Midtrans (Virtual Account)',
+                    'qris': 'Midtrans (QRIS)',
+                    'credit_card': 'Midtrans (Kartu Kredit)',
+                    'gopay': 'Midtrans (GoPay)',
+                    'shopeepay': 'Midtrans (ShopeePay)',
+                    'cstore': 'Midtrans (Minimarket)'
+                  };
+                  var metodeLengkap = metodeMap[payment_type] || ('Midtrans (' + payment_type.replace(/_/g, ' ') + ')');
+
                   await EmailService.sendPaymentApprovedEmail(billing.email, {
                     nama: billing.nama,
                     periode: billing.periode,
                     nominal: Number(billing.nominal).toLocaleString('id-ID'),
-                    dueDateFormatted: dueDateFormatted
+                    dueDateFormatted: dueDateFormatted,
+                    tanggalBayar: tglBayarStr,
+                    metodePembayaran: metodeLengkap
                   });
                 } catch (emailErr) {
                   console.error('[Midtrans Callback] Failed to send confirmation email:', emailErr.message);

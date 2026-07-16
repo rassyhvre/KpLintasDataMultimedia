@@ -125,11 +125,21 @@ router.post('/:id/approve', function(req, res) {
                 year: 'numeric'
               });
 
+              var tglBayarStr = new Date(payment.tanggal_upload || new Date()).toLocaleString('id-ID', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              });
+
               await EmailService.sendPaymentApprovedEmail(payment.email, {
                 nama: payment.nama,
                 periode: payment.periode,
                 nominal: Number(payment.nominal).toLocaleString('id-ID'),
-                dueDateFormatted: dueDateFormatted
+                dueDateFormatted: dueDateFormatted,
+                tanggalBayar: tglBayarStr,
+                metodePembayaran: 'Manual Transfer Bank'
               });
             } else {
               console.log('[Pembayaran] Pelanggan tidak memiliki email, notifikasi dilewati.');

@@ -153,7 +153,10 @@ var CronService = {
           periode: periode,
           nominal: nominal,
           dueDateString: dueDateString,
-          paymentUrl: paymentUrl
+          paymentUrl: paymentUrl,
+          daysDiff: daysDiff,
+          paket: bill.paket || '-',
+          idPelanggan: idPelanggan
         });
 
         // Record in reminder_log dengan datetime (Terkirim masuk database)
