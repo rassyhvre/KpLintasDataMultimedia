@@ -390,7 +390,7 @@ function CustomerPortalPage({ onLogout }) {
         return (
           <div className="portal-card" style={{ textAlign: 'center', padding: '48px 20px' }}>
             <span className="material-symbols-outlined" style={{ fontSize: 56, color: 'var(--status-hijau)', marginBottom: 16, display: 'block' }}>check_circle</span>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: 8, color: 'var(--status-hijau)' }}>Semua Tagihan Lunas</h3>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: 8, color: 'var(--status-hijau)' }}>Tagihan Lunas Pada Bulan Ini</h3>
             <p style={{ color: 'var(--md-on-surface-variant)', fontSize: '0.88rem' }}>Terima kasih atas pembayaran Anda. Layanan internet Anda aktif.</p>
           </div>
         );
@@ -403,7 +403,8 @@ function CustomerPortalPage({ onLogout }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <span style={{ fontSize: '0.8rem', color: 'var(--md-on-surface-variant)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Tagihan Periode {billing.periode}</span>
               <span className={`status-badge ${billing.status === 'menunggu_verifikasi' ? 'abu' : (billing.status_tagihan === 'kuning' ? 'kuning' : (billing.status_tagihan === 'merah' ? 'merah' : 'hijau'))}`}>
-                {billing.status === 'menunggu_verifikasi' ? 'Verifikasi Pending' : (billing.status_tagihan === 'kuning' ? 'Jatuh Tempo' : (billing.status_tagihan === 'merah' ? 'Menunggak' : 'Belum Bayar'))}
+                {/* {billing.status === 'menunggu_verifikasi' ? 'Verifikasi Pending' : (billing.status_tagihan === 'kuning' ? 'Jatuh Tempo' : (billing.status_tagihan === 'merah' ? 'Menunggak' : 'Belum Bayar'))} */}
+                {billing.status === 'menunggu_verifikasi' ? 'Verifikasi Pending' : (billing.status_tagihan === 'kuning' ? 'Jatuh Tempo' : (billing.status_tagihan === 'merah' ? 'Menunggak' : (billing.status_tagihan === 'hijau' ? 'Lunas' : 'Belum Bayar')))}
               </span>
             </div>
             <div style={{ fontSize: '2.5rem', fontWeight: 800, margin: '8px 0', color: 'var(--md-primary)', letterSpacing: '-1px' }}>
@@ -782,10 +783,10 @@ function CustomerPortalPage({ onLogout }) {
         .portal-menu-toggle { display: inline-flex; background: none; border: none; color: #ffffff; cursor: pointer; padding: 8px; border-radius: 50%; align-items: center; justify-content: center; }
         .portal-menu-toggle:hover { background: rgba(255, 255, 255, 0.1); }
         .portal-page-title { font-size: 1.15rem; font-weight: 800; color: #ffffff; }
-        .portal-hero-atlantis { background: var(--primary-dark, #004e5a); padding: 40px 48px 90px 48px; color: white; display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; box-shadow: 0px 4px 20px rgba(0,75,122,0.08); border-radius: 0; }
+        .portal-hero-atlantis { background: var(--primary-dark, #004e5a); padding: 40px 48px 70px 48px; color: white; display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; box-shadow: 0px 4px 20px rgba(0,75,122,0.08); border-radius: 0; }
         .portal-hero-atlantis h2 { font-size: 2.1rem; font-weight: 800; color: #ffffff; margin-bottom: 6px; letter-spacing: -0.02em; }
         .portal-hero-atlantis p { color: rgba(255, 255, 255, 0.82); max-width: 600px; line-height: 1.5; font-size: 0.95rem; }
-        .portal-content-area { padding: 32px 48px; max-width: 1100px; width: 100%; margin: -60px auto 0; flex: 1; position: relative; z-index: 10; }
+        .portal-content-area { padding: 32px 48px; max-width: 1100px; width: 100%; margin: -25px auto 0; flex: 1; position: relative; z-index: 10; }
         .portal-sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); z-index: 990; }
         .portal-card { background: #ffffff; border: 1px solid rgba(188,201,204,0.3); border-radius: var(--radius-lg); padding: 24px; box-shadow: 0px 4px 20px rgba(0,75,122,0.06); margin-bottom: 24px; }
         .portal-card-header { border-bottom: 1px solid var(--md-outline-variant); padding-bottom: 12px; margin-bottom: 18px; }
@@ -804,8 +805,8 @@ function CustomerPortalPage({ onLogout }) {
           .portal-sidebar-overlay.open { display: block; }
           .portal-menu-toggle { display: inline-flex; }
           .portal-topbar { padding: 0 16px; }
-          .portal-hero-atlantis { padding: 30px 20px 80px 20px; }
-          .portal-content-area { padding: 20px 16px; margin-top: -40px; }
+          .portal-hero-atlantis { padding: 30px 20px 65px 20px; }
+          .portal-content-area { padding: 20px 16px; margin-top: -20px; }
         }
         @media (max-width: 768px) {
           .profile-grid { grid-template-columns: 1fr; }
@@ -973,10 +974,12 @@ function CustomerPortalPage({ onLogout }) {
           {/* Messages Alerts */}
           {message.text && (
             <div style={{
-              background: message.type === 'success' ? 'var(--status-hijau-bg)' : 'var(--status-merah-bg)',
+              background: message.type === 'success' ? '#f0fdf4' : '#fef2f2',
               color: message.type === 'success' ? 'var(--status-hijau)' : 'var(--status-merah)',
+              border: message.type === 'success' ? '1px solid rgba(15, 157, 91, 0.2)' : '1px solid rgba(186, 26, 26, 0.2)',
               padding: '14px 16px', borderRadius: 'var(--radius-md)', marginBottom: 24,
-              display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.88rem', fontWeight: 600
+              display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.88rem', fontWeight: 600,
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.02)'
             }}>
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{message.type === 'success' ? 'check_circle' : 'error'}</span>
               {message.text}
@@ -986,9 +989,12 @@ function CustomerPortalPage({ onLogout }) {
           {/* Rejected Payment Alert */}
           {lastPayment && lastPayment.status === 'ditolak' && activeTab === 'billing' && (
             <div style={{
-              background: 'var(--status-merah-bg)', color: 'var(--status-merah)',
+              background: '#fef2f2',
+              color: 'var(--status-merah)',
+              border: '1px solid rgba(186, 26, 26, 0.2)',
               padding: '16px', borderRadius: 'var(--radius-md)', marginBottom: 24,
-              display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.88rem', lineHeight: 1.5
+              display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.88rem', lineHeight: 1.5,
+              boxShadow: '0 4px 12px rgba(186, 26, 26, 0.05)'
             }}>
               <span className="material-symbols-outlined" style={{ fontSize: 22, color: 'var(--status-merah)' }}>warning</span>
               <div>
