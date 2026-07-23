@@ -15,6 +15,7 @@ router.get('/', function(req, res) {
       n.status_baca,
       n.created_at AS tanggal,
       pem.id_pembayaran,
+      pem.bukti_file,
       t.periode,
       t.nominal,
       p.nama AS nama_pelanggan
@@ -36,6 +37,7 @@ router.get('/', function(req, res) {
     var pendingSql = `
       SELECT 
         pem.id_pembayaran,
+        pem.bukti_file,
         pem.tanggal_upload AS tanggal,
         t.periode,
         t.nominal,
@@ -61,55 +63,23 @@ router.get('/', function(req, res) {
             status_baca: 0,
             tanggal: p.tanggal,
             id_pembayaran: p.id_pembayaran,
+            bukti_file: p.bukti_file,
             periode: p.periode,
             nominal: p.nominal,
             nama_pelanggan: p.nama_pelanggan
           };
         });
 
-      // Fetch overdue bills to create virtual notifications for overdue bills
-      var overdueSql = `
-        SELECT 
-          t.id_tagihan,
-          t.due_date AS tanggal,
-          t.periode,
-          t.nominal,
-          p.nama AS nama_pelanggan
-        FROM tagihan t
-        JOIN pelanggan p ON t.id_pelanggan = p.id_pelanggan
-        WHERE t.status = 'terlambat' OR (t.status = 'belum_bayar' AND t.due_date < CURDATE())
-      `;
+      var allNotifs = [...results, ...virtualPendingNotifs];
+      
+      // Sort by date descending
+      allNotifs.sort(function(a, b) {
+        return new Date(b.tanggal) - new Date(a.tanggal);
+      });
 
-      db.query(overdueSql, function(err3, overdueResults) {
-        if (err3) {
-          console.error('[Notification API] Error fetching overdue bills:', err3.message);
-          return res.status(500).json({ success: false, message: 'Gagal mengambil tagihan overdue', error: err3.message });
-        }
-
-        var virtualOverdueNotifs = overdueResults.map(function(o) {
-          return {
-            tipe: 'tagihan_overdue',
-            id_notifikasi: 'virtual-od-' + o.id_tagihan,
-            status_baca: 0,
-            tanggal: o.tanggal,
-            id_tagihan: o.id_tagihan,
-            periode: o.periode,
-            nominal: o.nominal,
-            nama_pelanggan: o.nama_pelanggan
-          };
-        });
-
-        var allNotifs = [...results, ...virtualPendingNotifs, ...virtualOverdueNotifs];
-        
-        // Sort by date descending
-        allNotifs.sort(function(a, b) {
-          return new Date(b.tanggal) - new Date(a.tanggal);
-        });
-
-        res.json({
-          success: true,
-          data: allNotifs
-        });
+      res.json({
+        success: true,
+        data: allNotifs
       });
     });
   });

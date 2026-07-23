@@ -254,7 +254,7 @@ function Navbar({ admin, onLogout, socket, onToggleSidebar, collapsed }) {
               border: '1px solid var(--border-color)',
               width: '320px',
               maxHeight: '400px',
-              overflowY: 'auto',
+              overflowY: 'hidden',
               display: 'flex',
               flexDirection: 'column',
               zIndex: 110,
@@ -293,16 +293,19 @@ function Navbar({ admin, onLogout, socket, onToggleSidebar, collapsed }) {
                 ) : (
                   notifs.map(function(n) {
                     var isUnread = n.status_baca === 0;
-                    var title = n.tipe === 'pembayaran_masuk' ? 'Verifikasi Pembayaran' : 'Tagihan Overdue';
-                    var icon = n.tipe === 'pembayaran_masuk' ? 'payments' : 'warning';
-                    var iconBg = n.tipe === 'pembayaran_masuk' ? 'var(--status-hijau-bg)' : 'var(--status-merah-bg)';
-                    var iconColor = n.tipe === 'pembayaran_masuk' ? 'var(--status-hijau)' : 'var(--status-merah)';
+                    var isMidtrans = n.bukti_file && n.bukti_file.includes('Midtrans');
+                    var title = isMidtrans ? 'Pembayaran Midtrans' : 'Verifikasi Pembayaran';
+                    var icon = 'payments';
+                    var iconBg = isMidtrans ? 'var(--status-hijau-bg)' : 'var(--status-kuning-bg)';
+                    var iconColor = isMidtrans ? 'var(--status-hijau)' : 'var(--status-kuning)';
                     
-                    var desc = n.tipe === 'pembayaran_masuk' 
-                      ? `Pembayaran baru dari ${n.nama_pelanggan} (Periode ${n.periode})`
-                      : `Tagihan ${n.nama_pelanggan} (Periode ${n.periode}) sebesar Rp ${Number(n.nominal).toLocaleString('id-ID')} telah lewat jatuh tempo.`;
+                    var desc = isMidtrans 
+                      ? `Pembayaran otomatis via Midtrans dari ${n.nama_pelanggan} (Periode ${n.periode})`
+                      : `Pembayaran baru dari ${n.nama_pelanggan} (Periode ${n.periode})`;
 
-                    var targetLink = n.tipe === 'pembayaran_masuk' ? '/dashboard/pembayaran' : '/dashboard/pelanggan';
+                    var targetLink = isMidtrans 
+                      ? `/dashboard/notifikasi?notifId=${n.id_notifikasi}`
+                      : '/dashboard/pembayaran';
 
                     return (
                       <div 
@@ -358,6 +361,30 @@ function Navbar({ admin, onLogout, socket, onToggleSidebar, collapsed }) {
                     );
                   })
                 )}
+              </div>
+
+              {/* View All Footer */}
+              <div style={{
+                padding: '10px 16px',
+                borderTop: '1px solid var(--border-color)',
+                textAlign: 'center',
+                background: 'var(--bg-primary)',
+                borderBottomLeftRadius: '8px',
+                borderBottomRightRadius: '8px'
+              }}>
+                <Link 
+                  to="/dashboard/notifikasi"
+                  onClick={function() { setNotifOpen(false); }}
+                  style={{
+                    color: 'var(--primary)',
+                    fontSize: '0.8rem',
+                    fontWeight: '700',
+                    textDecoration: 'none',
+                    display: 'block'
+                  }}
+                >
+                  Lihat Semua Notifikasi
+                </Link>
               </div>
             </div>
           )}

@@ -95,6 +95,13 @@ router.post('/midtrans-callback', function (req, res) {
 
         var id_pembayaran = paymentResult.insertId;
 
+        // Insert into notifikasi table to track payment notification
+        db.query("INSERT INTO notifikasi (id_pembayaran) VALUES (?)", [id_pembayaran], function(notifErr) {
+          if (notifErr) {
+            console.error('[Midtrans Callback] Failed to insert notification record:', notifErr.message);
+          }
+        });
+
         // 3. Update tagihan status to 'lunas'
         var TagihanModel = require('../models/Tagihan');
         TagihanModel.updateStatus(id_tagihan, 'lunas', function (tagihanErr) {
@@ -230,6 +237,75 @@ router.post('/midtrans-callback', function (req, res) {
     console.log(`[Midtrans Callback] Acknowledging transaction status: ${transaction_status}`);
     return res.json({ success: true, message: 'Status callback received: ' + transaction_status });
   }
+});
+
+/* GET /api/customer/portal/check-billing - Public check billing status by Phone or PPPoE username */
+router.get('/check-billing', function (req, res) {
+  var { query } = req.query; // can be no_hp or pppoe_username
+
+  if (!query) {
+    return res.status(400).json({ success: false, message: 'Nomor HP atau Username PPPoE wajib diisi.' });
+  }
+
+  var sql = `
+    SELECT 
+      p.id_pelanggan,
+      p.nama,
+      p.email,
+      p.no_hp,
+      p.pppoe_username,
+      t.id_tagihan,
+      t.periode,
+      t.nominal,
+      t.status AS status_tagihan,
+      t.due_date
+    FROM pelanggan p
+    LEFT JOIN tagihan t ON p.id_pelanggan = t.id_pelanggan AND t.status != 'lunas'
+    WHERE p.no_hp = ? OR p.pppoe_username = ?
+    ORDER BY t.due_date ASC
+    LIMIT 1
+  `;
+
+  db.query(sql, [query, query], function (err, results) {
+    if (err) {
+      return res.status(500).json({ success: false, message: 'Database error', error: err.message });
+    }
+
+    if (results.length === 0) {
+      return res.status(404).json({ success: false, message: 'Data pelanggan tidak ditemukan.' });
+    }
+
+    var record = results[0];
+    
+    // Mask the customer name for security (e.g. John Doe -> J**n D**e)
+    var maskName = function (name) {
+      if (!name) return '';
+      return name.split(' ').map(function(word) {
+        if (word.length <= 2) return word[0] + '*';
+        return word[0] + '*'.repeat(word.length - 2) + word[word.length - 1];
+      }).join(' ');
+    };
+
+    var responseData = {
+      nama: maskName(record.nama),
+      hasActiveBill: !!record.id_tagihan,
+      email: record.email
+    };
+
+    if (record.id_tagihan) {
+      responseData.tagihan = {
+        periode: record.periode,
+        nominal: record.nominal,
+        status: record.status_tagihan,
+        due_date: record.due_date
+      };
+    }
+
+    res.json({
+      success: true,
+      data: responseData
+    });
+  });
 });
 
 // Protect all portal routes with customer JWT token

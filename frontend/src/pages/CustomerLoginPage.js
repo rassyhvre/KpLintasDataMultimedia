@@ -85,7 +85,7 @@ function CustomerLoginPage({ onLogin, title = "Portal Pembayaran" }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: windowWidth <= 480 ? '12px' : '24px',
+        padding: windowWidth <= 768 ? '16px' : '24px',
         zIndex: 2
       }}>
         <div style={{
@@ -97,7 +97,7 @@ function CustomerLoginPage({ onLogin, title = "Portal Pembayaran" }) {
         <div style={{
           background: 'var(--md-surface-container-lowest)',
           borderRadius: 'var(--radius-2xl)',
-          padding: windowWidth <= 480 ? '24px 16px' : '48px 40px',
+          padding: windowWidth <= 768 ? '32px 20px' : '48px 40px',
           boxShadow: '0px 4px 20px rgba(0, 75, 122, 0.08)'
         }}>
           {/* Logo */}

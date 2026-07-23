@@ -13,6 +13,35 @@ function LandingPage({ customer, onLogout }) {
 
   var [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
+  var [searchQuery, setSearchQuery] = useState('');
+  var [searchLoading, setSearchLoading] = useState(false);
+  var [searchResult, setSearchResult] = useState(null);
+  var [searchError, setSearchError] = useState('');
+
+  var handleCheckBilling = async function (e) {
+    e.preventDefault();
+    if (!searchQuery.trim()) {
+      setSearchError('Silakan masukkan nomor HP atau username PPPoE.');
+      setSearchResult(null);
+      return;
+    }
+
+    setSearchLoading(true);
+    setSearchError('');
+    setSearchResult(null);
+
+    try {
+      var response = await axios.get(`${API_BASE_URL}/api/customer/portal/check-billing?query=${encodeURIComponent(searchQuery.trim())}`);
+      if (response.data.success) {
+        setSearchResult(response.data.data);
+      }
+    } catch (err) {
+      setSearchError(err.response?.data?.message || 'Gagal memeriksa tagihan. Silakan coba beberapa saat lagi.');
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
   useEffect(function () {
     function handleResize() {
       setWindowWidth(window.innerWidth);
@@ -287,6 +316,215 @@ function LandingPage({ customer, onLogout }) {
             pointerEvents: 'none'
           }}>
             <HeroSplineScene logoCoverColor="linear-gradient(to bottom, #fafbfc, #fbfcfd)" />
+          </div>
+        </div>
+      </section>
+
+      {/* Search Payment Section */}
+      <section className="landing-check-billing reveal-on-scroll" style={{
+        padding: isMobile ? '40px 16px' : '60px 24px',
+        background: 'var(--bg-secondary)',
+        borderBottom: '1px solid var(--border-color)'
+      }}>
+        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+            <h2 style={{ fontSize: isMobile ? '1.5rem' : '1.8rem', fontWeight: 800, color: 'var(--md-on-surface)', marginBottom: '8px' }}>
+              Cek Status Tagihan & Pembayaran
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: '1.5' }}>
+              Masukkan Nomor HP terdaftar atau Username PPPoE Anda untuk mengecek tagihan dan status pembayaran secara instan tanpa perlu masuk.
+            </p>
+          </div>
+
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '12px',
+            padding: isMobile ? '16px' : '24px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+            border: '1px solid var(--border-color)'
+          }}>
+            <form onSubmit={handleCheckBilling} style={{ 
+              display: 'flex', 
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: '12px' 
+            }}>
+              <input
+                type="text"
+                placeholder="Masukkan Nomor HP (e.g. 08123...) atau Username PPPoE"
+                value={searchQuery}
+                onChange={function (e) { setSearchQuery(e.target.value); }}
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1.5px solid var(--border-color)',
+                  fontSize: '0.95rem',
+                  outline: 'none',
+                  transition: 'border-color 0.2s',
+                  fontFamily: "'Hanken Grotesk', sans-serif",
+                  width: '100%'
+                }}
+                onFocus={function(e) { e.target.style.borderColor = 'var(--md-primary)'; }}
+                onBlur={function(e) { e.target.style.borderColor = 'var(--border-color)'; }}
+              />
+              <button
+                type="submit"
+                disabled={searchLoading}
+                className="landing-btn-primary"
+                style={{
+                  padding: '12px 24px',
+                  borderRadius: '8px',
+                  fontWeight: '700',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  border: 'none',
+                  width: isMobile ? '100%' : 'auto',
+                  minWidth: '150px'
+                }}
+              >
+                {searchLoading ? 'Memeriksa...' : (
+                  <>
+                    <span className="material-symbols-outlined" style={{ fontSize: 20 }}>search</span>
+                    Cek Tagihan
+                  </>
+                )}
+              </button>
+            </form>
+
+            {searchError && (
+              <div style={{
+                marginTop: '20px',
+                padding: '12px 16px',
+                borderRadius: '8px',
+                background: 'rgba(239, 68, 68, 0.08)',
+                color: '#dc2626',
+                fontSize: '0.88rem',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                animation: 'fadeIn 0.3s ease'
+              }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 20 }}>error</span>
+                {searchError}
+              </div>
+            )}
+
+            {searchResult && (
+              <div style={{ marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '20px', animation: 'fadeIn 0.3s ease' }}>
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: isMobile ? 'column' : 'row',
+                  justifyContent: 'space-between', 
+                  alignItems: isMobile ? 'flex-start' : 'center', 
+                  marginBottom: '16px', 
+                  gap: '8px' 
+                }}>
+                  <div style={{ fontSize: '0.92rem', color: 'var(--text-secondary)' }}>
+                    Pelanggan: <strong style={{ color: 'var(--text-primary)' }}>{searchResult.nama}</strong>
+                  </div>
+                  <span className="status-badge" style={{
+                    background: 'rgba(0, 104, 118, 0.08)',
+                    color: 'var(--md-primary)',
+                    fontWeight: 700,
+                    fontSize: '0.78rem',
+                    padding: '4px 10px',
+                    borderRadius: '20px'
+                  }}>
+                    Terdaftar
+                  </span>
+                </div>
+
+                {searchResult.hasActiveBill ? (
+                  <div style={{
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    padding: isMobile ? '16px' : '20px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '14px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color-light)', paddingBottom: '10px', flexWrap: 'wrap', gap: '4px' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Periode Tagihan</span>
+                      <span style={{ fontWeight: 700, fontSize: '0.88rem' }}>{searchResult.tagihan.periode}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color-light)', paddingBottom: '10px', flexWrap: 'wrap', gap: '4px' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Jumlah Tagihan</span>
+                      <span style={{ fontWeight: 700, color: 'var(--md-primary)', fontSize: '0.92rem' }}>
+                        Rp {Number(searchResult.tagihan.nominal).toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color-light)', paddingBottom: '10px', flexWrap: 'wrap', gap: '4px' }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Batas Jatuh Tempo</span>
+                      <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>
+                        {new Date(searchResult.tagihan.due_date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      </span>
+                    </div>
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: isMobile ? 'flex-start' : 'center', 
+                      flexDirection: isMobile ? 'column' : 'row', 
+                      gap: '8px' 
+                    }}>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Status Pembayaran</span>
+                      <span className={'status-badge ' + (searchResult.tagihan.status === 'proses' ? 'kuning' : 'merah')} style={{ fontSize: '0.78rem' }}>
+                        {searchResult.tagihan.status === 'proses' ? 'Menunggu Verifikasi Admin' : 'Belum Bayar'}
+                      </span>
+                    </div>
+
+                    <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'flex-end' }}>
+                      <button
+                        className="landing-btn-primary"
+                        onClick={function() {
+                          navigate('/login', { state: { email: searchResult.email } });
+                        }}
+                        style={{ 
+                          padding: '10px 20px', 
+                          borderRadius: '6px', 
+                          fontSize: '0.85rem',
+                          width: isMobile ? '100%' : 'auto',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>payments</span>
+                        Bayar Sekarang
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{
+                    background: 'rgba(34, 197, 94, 0.08)',
+                    border: '1px solid rgba(34, 197, 94, 0.2)',
+                    borderRadius: '10px',
+                    padding: '24px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{
+                      width: '48px',
+                      height: '48px',
+                      background: 'rgba(34, 197, 94, 0.15)',
+                      borderRadius: '50%',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#22c55e',
+                      marginBottom: '12px'
+                    }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 24, fontWeight: 'bold' }}>check</span>
+                    </div>
+                    <h4 style={{ color: '#166534', fontWeight: 800, fontSize: '1rem', marginBottom: '4px' }}>Semua Tagihan Lunas!</h4>
+                    <p style={{ color: '#166534', fontSize: '0.85rem', margin: 0 }}>
+                      Terima kasih! Tidak ada tagihan pending untuk bulan ini. Koneksi internet Anda aktif.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </section>

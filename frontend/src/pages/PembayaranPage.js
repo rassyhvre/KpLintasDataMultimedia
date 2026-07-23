@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import Modal from '../components/Modal';
 import TemplateIcon from '../components/TemplateIcon';
@@ -7,6 +8,8 @@ import { API_BASE_URL } from '../config';
 function PembayaranPage({ socket }) {
   var [pendingPayments, setPendingPayments] = useState([]);
   var [loading, setLoading] = useState(true);
+  var location = useLocation();
+  var queryType = new URLSearchParams(location.search).get('type') || 'manual'; // 'manual' or 'midtrans'
 
   // Modals state
   var [viewBukti, setViewBukti] = useState(null); // holds payment object
@@ -41,11 +44,15 @@ function PembayaranPage({ socket }) {
         socket.off('pembayaran_masuk');
       }
     };
-  }, [socket]);
+  }, [socket, queryType]);
 
   async function fetchPending() {
+    setLoading(true);
     try {
-      var response = await axios.get(`${API_BASE_URL}/api/pembayaran/pending`, { headers: headers });
+      var url = queryType === 'midtrans' 
+        ? `${API_BASE_URL}/api/pembayaran/midtrans` 
+        : `${API_BASE_URL}/api/pembayaran/pending`;
+      var response = await axios.get(url, { headers: headers });
       if (response.data.success) {
         setPendingPayments(response.data.data);
       }
@@ -99,6 +106,36 @@ function PembayaranPage({ socket }) {
     }
   }
 
+  function parseMidtransBukti(buktiStr) {
+    if (!buktiStr) return { tipe: 'Midtrans', status: 'Selesai' };
+    var parts = buktiStr.split(' / ');
+    var rawType = parts[1] || 'automatic';
+    var rawStatus = parts[2] || 'settlement';
+
+    var tipeMap = {
+      'bank_transfer': 'Virtual Account (VA)',
+      'qris': 'QRIS (Gopay/OVO/Dana/LinkAja)',
+      'credit_card': 'Kartu Kredit',
+      'gopay': 'GoPay',
+      'shopeepay': 'ShopeePay',
+      'cstore': 'Minimarket (Indomaret/Alfamart)'
+    };
+
+    var statusMap = {
+      'settlement': 'Sukses (Settlement)',
+      'capture': 'Sukses (Captured)',
+      'pending': 'Tertunda (Pending)',
+      'deny': 'Ditolak (Denied)',
+      'expire': 'Kadaluarsa (Expired)',
+      'cancel': 'Dibatalkan (Cancelled)'
+    };
+
+    return {
+      tipe: tipeMap[rawType] || rawType.replace(/_/g, ' ').toUpperCase(),
+      status: statusMap[rawStatus] || rawStatus.toUpperCase()
+    };
+  }
+
   function handleBuktiWheel(e) {
     e.preventDefault();
     setZoomScale(function (prev) {
@@ -127,8 +164,8 @@ function PembayaranPage({ socket }) {
     <div>
       <div className="page-header">
         <div>
-          <h1>Persetujuan Pembayaran</h1>
-          <p>Verifikasi bukti transfer dari pelanggan dan aktifkan kembali layanan internet mereka.</p>
+          <h1>{queryType === 'midtrans' ? 'Riwayat Pembayaran Midtrans' : 'Persetujuan Pembayaran'}</h1>
+          <p>{queryType === 'midtrans' ? 'Daftar transaksi pembayaran tagihan otomatis via Midtrans.' : 'Verifikasi bukti transfer dari pelanggan dan aktifkan kembali layanan internet mereka.'}</p>
         </div>
       </div>
 
@@ -140,7 +177,10 @@ function PembayaranPage({ socket }) {
 
       <div className="table-container animate-fadeIn">
         <div className="table-header">
-          <h3><TemplateIcon name="document" size={18} style={{ marginRight: '8px' }} /> Antrean Verifikasi ({pendingPayments.length})</h3>
+          <h3>
+            <TemplateIcon name="document" size={18} style={{ marginRight: '8px' }} /> 
+            {queryType === 'midtrans' ? `Transaksi Sukses (${pendingPayments.length})` : `Antrean Verifikasi (${pendingPayments.length})`}
+          </h3>
         </div>
 
         {loading ? (
@@ -152,7 +192,7 @@ function PembayaranPage({ socket }) {
         ) : pendingPayments.length === 0 ? (
           <div className="table-empty">
             <div className="table-empty-icon"><TemplateIcon name="check" size={28} /></div>
-            <p>Tidak ada pengajuan pembayaran pending saat ini. Semua bersih!</p>
+            <p>{queryType === 'midtrans' ? 'Belum ada transaksi Midtrans.' : 'Tidak ada pengajuan pembayaran pending saat ini. Semua bersih!'}</p>
           </div>
         ) : (
           <table className="data-table">
@@ -163,13 +203,14 @@ function PembayaranPage({ socket }) {
                 <th>No HP</th>
                 <th>Periode Tagihan</th>
                 <th>Nominal</th>
-                <th>Waktu Upload</th>
-                <th>Bukti Transfer</th>
+                <th>{queryType === 'midtrans' ? 'Waktu Transaksi' : 'Waktu Upload'}</th>
+                <th>{queryType === 'midtrans' ? 'Detail' : 'Bukti Transfer'}</th>
                 <th>Aksi</th>
               </tr>
             </thead>
             <tbody>
               {pendingPayments.map(function (item, idx) {
+                var isMidtrans = item.bukti_file && item.bukti_file.includes('Midtrans');
                 return (
                   <tr key={item.id_pembayaran}>
                     <td style={{ color: 'var(--text-muted)' }}>{idx + 1}</td>
@@ -185,26 +226,31 @@ function PembayaranPage({ socket }) {
                         className="btn btn-secondary btn-sm"
                         onClick={function () { setZoomScale(1); setViewBukti(item); }}
                       >
-                        <TemplateIcon name="camera" size={14} style={{ marginRight: '6px' }} /> Lihat Bukti
+                        <TemplateIcon name={isMidtrans ? 'document' : 'camera'} size={14} style={{ marginRight: '6px' }} /> 
+                        {isMidtrans ? 'Detail Transaksi' : 'Lihat Bukti'}
                       </button>
                     </td>
                     <td>
-                      <div className="table-actions">
-                        <button
-                          className="btn btn-primary btn-sm"
-                          onClick={function () { handleApprove(item.id_pembayaran); }}
-                          disabled={actionLoading}
-                        >
-                          <TemplateIcon name="check" size={14} style={{ marginRight: '6px' }} /> Terima
-                        </button>
-                        <button
-                          className="btn btn-danger btn-sm"
-                          onClick={function () { setRejectTarget(item); }}
-                          disabled={actionLoading}
-                        >
-                          <TemplateIcon name="close" size={14} style={{ marginRight: '6px' }} /> Tolak
-                        </button>
-                      </div>
+                      {isMidtrans ? (
+                        <span className="status-badge hijau">Lunas (Otomatis)</span>
+                      ) : (
+                        <div className="table-actions">
+                          <button
+                            className="btn btn-primary btn-sm"
+                            onClick={function () { handleApprove(item.id_pembayaran); }}
+                            disabled={actionLoading}
+                          >
+                            <TemplateIcon name="check" size={14} style={{ marginRight: '6px' }} /> Terima
+                          </button>
+                          <button
+                            className="btn btn-danger btn-sm"
+                            onClick={function () { setRejectTarget(item); }}
+                            disabled={actionLoading}
+                          >
+                            <TemplateIcon name="close" size={14} style={{ marginRight: '6px' }} /> Tolak
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
@@ -214,49 +260,101 @@ function PembayaranPage({ socket }) {
         )}
       </div>
 
-      {/* Modal View Bukti Transfer */}
+      {/* Modal View Bukti Transfer / Detail Transaksi */}
       {viewBukti && (
         <Modal
           isOpen={viewBukti !== null}
           onClose={function () { resetBuktiZoom(); setViewBukti(null); }}
-          title={<><TemplateIcon name="camera" size={16} style={{ marginRight: '8px' }} /> Bukti Transfer - {viewBukti.nama}</>}
+          title={
+            viewBukti.bukti_file && viewBukti.bukti_file.includes('Midtrans') ? (
+              <><TemplateIcon name="document" size={16} style={{ marginRight: '8px' }} /> Detail Transaksi Midtrans - {viewBukti.nama}</>
+            ) : (
+              <><TemplateIcon name="camera" size={16} style={{ marginRight: '8px' }} /> Bukti Transfer - {viewBukti.nama}</>
+            )
+          }
           footer={
-            <>
-              <button className="btn btn-secondary" onClick={function () { setViewBukti(null); }}>Batal</button>
-              <button
-                className="btn btn-danger"
-                onClick={function () { setRejectTarget(viewBukti); }}
-                disabled={actionLoading}
-              >
-                <TemplateIcon name="close" size={14} style={{ marginRight: '6px' }} /> Tolak
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={function () { handleApprove(viewBukti.id_pembayaran); }}
-                disabled={actionLoading}
-              >
-                <TemplateIcon name="check" size={14} style={{ marginRight: '6px' }} /> Terima Pembayaran
-              </button>
-            </>
+            viewBukti.bukti_file && viewBukti.bukti_file.includes('Midtrans') ? (
+              <button className="btn btn-primary btn-sm" onClick={function () { setViewBukti(null); }}>Tutup</button>
+            ) : (
+              <>
+                <button className="btn btn-secondary" onClick={function () { setViewBukti(null); }}>Batal</button>
+                <button
+                  className="btn btn-danger"
+                  onClick={function () { setRejectTarget(viewBukti); }}
+                  disabled={actionLoading}
+                >
+                  <TemplateIcon name="close" size={14} style={{ marginRight: '6px' }} /> Tolak
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={function () { handleApprove(viewBukti.id_pembayaran); }}
+                  disabled={actionLoading}
+                >
+                  <TemplateIcon name="check" size={14} style={{ marginRight: '6px' }} /> Terima Pembayaran
+                </button>
+              </>
+            )
           }
         >
-          <div style={{ textAlign: 'center', padding: '10px' }}>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginBottom: '14px' }}>
-              Tagihan: <strong>Rp {Number(viewBukti.nominal).toLocaleString('id-ID')}</strong> | Periode: <strong>{viewBukti.periode}</strong>
-            </p>
-            {/* <p className="image-zoom-hint">
-              Scroll mouse / trackpad untuk memperbesar atau memperkecil gambar bukti.
-            </p> */}
-            <div className="image-zoom-wrapper">
-              <img
-                src={`${API_BASE_URL}${viewBukti.bukti_file}`}
-                alt="Bukti Transfer Pelanggan"
-                className={zoomScale > 1 ? 'image-zoom-image zoomed' : 'image-zoom-image'}
-                onWheel={handleBuktiWheel}
-                style={{ transform: `scale(${zoomScale})`, transformOrigin: 'center center' }}
-              />
+          {viewBukti.bukti_file && viewBukti.bukti_file.includes('Midtrans') ? (
+            <div style={{ padding: '10px 0' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Nama Pelanggan</span>
+                  <span style={{ fontWeight: '700', fontSize: '0.88rem' }}>{viewBukti.nama}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>No HP</span>
+                  <span style={{ fontWeight: '600', fontSize: '0.88rem' }}>{viewBukti.no_hp}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Periode Tagihan</span>
+                  <span style={{ fontWeight: '700', fontSize: '0.88rem' }}>{viewBukti.periode}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Nominal</span>
+                  <span style={{ fontWeight: '700', color: 'var(--primary)', fontSize: '0.88rem' }}>
+                    Rp {Number(viewBukti.nominal).toLocaleString('id-ID')}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Metode Pembayaran</span>
+                  <span style={{ fontWeight: '600', fontSize: '0.88rem' }}>
+                    {parseMidtransBukti(viewBukti.bukti_file).tipe}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Status Transaksi</span>
+                  <span className="status-badge hijau" style={{ fontSize: '0.78rem' }}>
+                    {parseMidtransBukti(viewBukti.bukti_file).status}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Waktu Transaksi</span>
+                  <span style={{ fontSize: '0.88rem' }}>{formatTanggal(viewBukti.tanggal_upload)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>ID Pembayaran</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.88rem', fontFamily: 'monospace' }}>#{viewBukti.id_pembayaran}</span>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '10px' }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginBottom: '14px' }}>
+                Tagihan: <strong>Rp {Number(viewBukti.nominal).toLocaleString('id-ID')}</strong> | Periode: <strong>{viewBukti.periode}</strong>
+              </p>
+              <div className="image-zoom-wrapper">
+                <img
+                  src={`${API_BASE_URL}${viewBukti.bukti_file}`}
+                  alt="Bukti Transfer Pelanggan"
+                  className={zoomScale > 1 ? 'image-zoom-image zoomed' : 'image-zoom-image'}
+                  onWheel={handleBuktiWheel}
+                  style={{ transform: `scale(${zoomScale})`, transformOrigin: 'center center' }}
+                />
+              </div>
+            </div>
+          )}
         </Modal>
       )}
 

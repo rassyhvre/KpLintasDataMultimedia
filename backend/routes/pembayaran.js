@@ -21,6 +21,30 @@ router.get('/pending', function(req, res) {
   });
 });
 
+/* GET /api/pembayaran/midtrans - Get all Midtrans payments */
+router.get('/midtrans', function(req, res) {
+  var db = require('../config/db');
+  var sql = `
+    SELECT 
+      pem.*, 
+      t.periode, 
+      t.nominal, 
+      p.nama, 
+      p.no_hp
+    FROM pembayaran pem
+    JOIN tagihan t ON pem.id_tagihan = t.id_tagihan
+    JOIN pelanggan p ON t.id_pelanggan = p.id_pelanggan
+    WHERE pem.bukti_file LIKE 'Midtrans%'
+    ORDER BY pem.tanggal_upload DESC
+  `;
+  db.query(sql, function(err, results) {
+    if (err) {
+      return res.status(500).json({ success: false, message: 'Database error', error: err.message });
+    }
+    res.json({ success: true, data: results });
+  });
+});
+
 /* POST /api/pembayaran/:id/approve - Approve payment proof */
 router.post('/:id/approve', function(req, res) {
   var id_pembayaran = req.params.id;

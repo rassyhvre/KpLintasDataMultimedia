@@ -7,7 +7,7 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
   var location = useLocation();
   var [profileOpen, setProfileOpen] = useState(false);
   var [pendingCount, setPendingCount] = useState(0);
-  var [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  var [pembayaranOpen, setPembayaranOpen] = useState(false);
 
   function getInitials(nama) {
     if (!nama) return 'A';
@@ -28,16 +28,6 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
         }
       })
       .catch(function(err) { console.error('Sidebar error pending payment:', err); });
-
-    // Fetch unread notifications count
-    axios.get(API_BASE_URL + '/api/notifikasi', { headers: headers })
-      .then(function(res) {
-        if (res.data.success) {
-          var unread = res.data.data.filter(function(n) { return n.status_baca === 0; }).length;
-          setUnreadNotifCount(unread);
-        }
-      })
-      .catch(function(err) { console.error('Sidebar error notifications:', err); });
   };
 
   useEffect(function() {
@@ -67,7 +57,16 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
         { path: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
         { path: '/dashboard/pelanggan', label: 'Pelanggan', icon: 'group' },
         { path: '/dashboard/pelanggan?action=tagihan', label: 'Tagihan', icon: 'receipt_long' },
-        { path: '/dashboard/pembayaran', label: 'Pembayaran', icon: 'payments', badge: pendingCount }
+        { 
+          path: '/dashboard/pembayaran', 
+          label: 'Pembayaran', 
+          icon: 'payments', 
+          badge: pendingCount,
+          subItems: [
+            { path: '/dashboard/pembayaran?type=manual', label: 'Transfer Manual', badge: pendingCount },
+            { path: '/dashboard/pembayaran?type=midtrans', label: 'Midtrans' }
+          ]
+        }
       ]
     },
     {
@@ -82,9 +81,7 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
       section: 'Lainnya',
       items: [
         { path: '/dashboard/laporan?action=pengeluaran', label: 'Pengeluaran', icon: 'account_balance_wallet' },
-      //  { path: '/dashboard?action=notifikasi', label: 'Notifikasi', icon: 'notifications', badge: unreadNotifCount },
-        { path: '/dashboard/pembayaran', label: 'Notifikasi', icon: 'notifications', badge: unreadNotifCount },
-        { path: '/dashboard?action=pengaturan', label: 'Pengaturan', icon: 'settings' }
+        { path: '/dashboard/pengaturan', label: 'Pengaturan', icon: 'settings' }
       ]
     }
   ];
@@ -252,7 +249,165 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
                 var isCleanActive = location.pathname === item.path.split('?')[0];
                 var isActive = isCleanActive || (item.path.includes('action') && location.pathname + location.search === item.path);
                 
-                // Special highlight if active
+                var hasSubItems = item.subItems && item.subItems.length > 0;
+                var isExpanded = hasSubItems && (pembayaranOpen || location.pathname.startsWith('/dashboard/pembayaran'));
+
+                // Render collapsible menu if subItems exist
+                if (hasSubItems) {
+                  return (
+                    <div key={iIdx} style={{ display: 'flex', flexDirection: 'column' }}>
+                      <Link
+                        to={item.path}
+                        onClick={function(e) { 
+                          if (!collapsed) {
+                            e.preventDefault(); 
+                            setPembayaranOpen(!pembayaranOpen); 
+                          }
+                        }}
+                        className={'sidebar-link' + (isCleanActive ? ' active' : '')}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: collapsed ? '0' : '12px',
+                          justifyContent: collapsed ? 'center' : 'flex-start',
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          color: isCleanActive ? 'var(--primary)' : 'var(--text-secondary)',
+                          background: isCleanActive ? 'var(--primary-glow)' : 'transparent',
+                          fontWeight: isCleanActive ? '700' : '600',
+                          textDecoration: 'none',
+                          marginBottom: '4px',
+                          fontSize: '0.88rem',
+                          transition: 'all 0.25s ease',
+                          position: 'relative'
+                        }}
+                        onMouseEnter={function(e) {
+                          if (!isCleanActive) {
+                            e.currentTarget.style.background = 'var(--bg-secondary)';
+                            e.currentTarget.style.color = 'var(--text-primary)';
+                          }
+                        }}
+                        onMouseLeave={function(e) {
+                          if (!isCleanActive) {
+                            e.currentTarget.style.background = 'transparent';
+                            e.currentTarget.style.color = 'var(--text-secondary)';
+                          }
+                        }}
+                      >
+                        <span 
+                          className="material-symbols-outlined" 
+                          style={{ 
+                            fontSize: '1.3rem',
+                            color: isCleanActive ? 'var(--primary)' : 'var(--text-muted)'
+                          }}
+                        >
+                          {item.icon}
+                        </span>
+                        {!collapsed && <span>{item.label}</span>}
+                        
+                        {!collapsed && item.badge > 0 && (
+                          <span style={{
+                            marginLeft: 'auto',
+                            background: 'var(--status-merah)',
+                            color: '#ffffff',
+                            fontSize: '0.68rem',
+                            fontWeight: '700',
+                            padding: item.badge > 9 ? '2px 6px' : '2px 5px',
+                            borderRadius: '10px',
+                            lineHeight: 1,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+                          }}>
+                            {item.badge}
+                          </span>
+                        )}
+
+                        {!collapsed && (
+                          <span className="material-symbols-outlined" style={{
+                            fontSize: '1.1rem',
+                            color: 'var(--text-muted)',
+                            marginLeft: item.badge > 0 ? '6px' : 'auto',
+                            transform: isExpanded ? 'rotate(180deg)' : 'none',
+                            transition: 'transform 0.2s ease'
+                          }}>
+                            keyboard_arrow_down
+                          </span>
+                        )}
+                      </Link>
+
+                      {/* Sub Items List */}
+                      {isExpanded && !collapsed && (
+                        <div style={{
+                          paddingLeft: '16px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px',
+                          marginTop: '2px',
+                          marginBottom: '8px',
+                          borderLeft: '1px solid var(--border-color)',
+                          marginLeft: '20px'
+                        }}>
+                          {item.subItems.map(function(subItem, sIdx) {
+                            var isSubActive = location.pathname + location.search === subItem.path || 
+                              (subItem.path === '/dashboard/pembayaran?type=manual' && (location.pathname + location.search === '/dashboard/pembayaran' || location.pathname + location.search === '/dashboard/pembayaran?type=manual'));
+                            
+                            return (
+                              <Link
+                                key={sIdx}
+                                to={subItem.path}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  padding: '8px 12px',
+                                  borderRadius: '6px',
+                                  color: isSubActive ? 'var(--primary)' : 'var(--text-secondary)',
+                                  background: isSubActive ? 'var(--primary-glow)' : 'transparent',
+                                  fontWeight: isSubActive ? '700' : '600',
+                                  textDecoration: 'none',
+                                  fontSize: '0.82rem',
+                                  transition: 'all 0.2s ease',
+                                  position: 'relative'
+                                }}
+                                onMouseEnter={function(e) {
+                                  if (!isSubActive) {
+                                    e.currentTarget.style.background = 'var(--bg-secondary)';
+                                    e.currentTarget.style.color = 'var(--text-primary)';
+                                  }
+                                }}
+                                onMouseLeave={function(e) {
+                                  if (!isSubActive) {
+                                    e.currentTarget.style.background = 'transparent';
+                                    e.currentTarget.style.color = 'var(--text-secondary)';
+                                  }
+                                }}
+                              >
+                                <span>{subItem.label}</span>
+                                {subItem.badge > 0 && (
+                                  <span style={{
+                                    marginLeft: 'auto',
+                                    background: 'var(--status-merah)',
+                                    color: '#ffffff',
+                                    fontSize: '0.62rem',
+                                    fontWeight: '700',
+                                    padding: '1px 4px',
+                                    borderRadius: '8px',
+                                    lineHeight: 1
+                                  }}>
+                                    {subItem.badge}
+                                  </span>
+                                )}
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Standard link rendering
                 return (
                   <Link
                     key={iIdx}
