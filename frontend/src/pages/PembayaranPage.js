@@ -49,8 +49,8 @@ function PembayaranPage({ socket }) {
   async function fetchPending() {
     setLoading(true);
     try {
-      var url = queryType === 'midtrans' 
-        ? `${API_BASE_URL}/api/pembayaran/midtrans` 
+      var url = queryType === 'midtrans'
+        ? `${API_BASE_URL}/api/pembayaran/midtrans`
         : `${API_BASE_URL}/api/pembayaran/pending`;
       var response = await axios.get(url, { headers: headers });
       if (response.data.success) {
@@ -178,7 +178,7 @@ function PembayaranPage({ socket }) {
       <div className="table-container animate-fadeIn">
         <div className="table-header">
           <h3>
-            <TemplateIcon name="document" size={18} style={{ marginRight: '8px' }} /> 
+            <TemplateIcon name="document" size={18} style={{ marginRight: '8px' }} />
             {queryType === 'midtrans' ? `Transaksi Sukses (${pendingPayments.length})` : `Antrean Verifikasi (${pendingPayments.length})`}
           </h3>
         </div>
@@ -226,7 +226,7 @@ function PembayaranPage({ socket }) {
                         className="btn btn-secondary btn-sm"
                         onClick={function () { setZoomScale(1); setViewBukti(item); }}
                       >
-                        <TemplateIcon name={isMidtrans ? 'document' : 'camera'} size={14} style={{ marginRight: '6px' }} /> 
+                        <TemplateIcon name={isMidtrans ? 'document' : 'camera'} size={14} style={{ marginRight: '6px' }} />
                         {isMidtrans ? 'Detail Transaksi' : 'Lihat Bukti'}
                       </button>
                     </td>
