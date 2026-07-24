@@ -142,7 +142,7 @@ function Navbar({ admin, onLogout, socket, onToggleSidebar, collapsed }) {
       </div>
 
       {/* Middle: Search bar */}
-      <div style={{ display: 'flex', flex: 1, maxWidth: '400px', margin: '0 20px', position: 'relative' }}>
+      {/* <div style={{ display: 'flex', flex: 1, maxWidth: '400px', margin: '0 20px', position: 'relative' }}>
         <span className="material-symbols-outlined" style={{
           position: 'absolute',
           left: '14px',
@@ -177,7 +177,7 @@ function Navbar({ admin, onLogout, socket, onToggleSidebar, collapsed }) {
             e.currentTarget.style.boxShadow = 'none';
           }}
         />
-      </div>
+      </div> */}
 
       {/* Right side actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -433,7 +433,7 @@ function Navbar({ admin, onLogout, socket, onToggleSidebar, collapsed }) {
               width: '36px',
               height: '36px',
               borderRadius: '50%',
-              background: '#ffffff',
+              background: admin && admin.foto_profil ? 'transparent' : '#ffffff',
               color: 'var(--primary)',
               fontWeight: '700',
               fontSize: '0.85rem',
@@ -441,9 +441,20 @@ function Navbar({ admin, onLogout, socket, onToggleSidebar, collapsed }) {
               alignItems: 'center',
               justifyContent: 'center',
               border: '2px solid rgba(255,255,255,0.3)',
-              boxShadow: 'var(--shadow-sm)'
+              boxShadow: 'var(--shadow-sm)',
+              overflow: 'hidden',
+              flexShrink: 0
             }}>
-              {getInitials(admin ? admin.nama : 'Admin')}
+              {admin && admin.foto_profil ? (
+                <img
+                  src={API_BASE_URL + admin.foto_profil + '?t=' + Date.now()}
+                  alt="Foto Profil"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                  onError={function(e) { e.target.style.display = 'none'; }}
+                />
+              ) : (
+                getInitials(admin ? admin.nama : 'Admin')
+              )}
             </div>
             <div style={{ display: 'none', flexDirection: 'column', textAlign: 'left' }} className="desktop-only-flex">
               <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>{admin ? admin.nama : 'Admin LDM'}</span>

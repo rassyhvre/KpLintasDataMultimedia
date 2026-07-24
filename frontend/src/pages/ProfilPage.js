@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import TemplateIcon from '../components/TemplateIcon';
 
-function ProfilPage() {
+function ProfilPage({ onAdminUpdate }) {
   var [admin, setAdmin] = useState(null);
   var [loading, setLoading] = useState(true);
   var [editNama, setEditNama] = useState('');
@@ -11,6 +11,14 @@ function ProfilPage() {
   var [savingNama, setSavingNama] = useState(false);
   var [successMsg, setSuccessMsg] = useState('');
   var [errorMsg, setErrorMsg] = useState('');
+
+  // Foto profil state
+  var [uploadingFoto, setUploadingFoto] = useState(false);
+  var [deletingFoto, setDeletingFoto] = useState(false);
+  var [fotoPreview, setFotoPreview] = useState(null);
+  var [isDragOver, setIsDragOver] = useState(false);
+  var [fotoTimestamp, setFotoTimestamp] = useState(Date.now()); // cache-buster
+  var fotoInputRef = useRef(null);
 
   // Password change state
   var [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -56,6 +64,91 @@ function ProfilPage() {
     setTimeout(function () { setErrorMsg(''); }, 5000);
   }
 
+  function getFotoUrl(fotoProfil) {
+    if (!fotoProfil) return null;
+    // Tambahkan timestamp agar browser tidak pakai cache gambar lama
+    return API_BASE_URL + fotoProfil + '?t=' + fotoTimestamp;
+  }
+
+  function handleFotoFileChange(file) {
+    if (!file) return;
+    var allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      showError('Hanya file gambar JPG, PNG, atau WEBP yang diperbolehkan.');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      showError('Ukuran file maksimal 2MB.');
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function (e) { setFotoPreview(e.target.result); };
+    reader.readAsDataURL(file);
+    handleUploadFoto(file);
+  }
+
+  function handleUploadFoto(file) {
+    setUploadingFoto(true);
+    var formData = new FormData();
+    formData.append('foto', file);
+    axios.post(API_BASE_URL + '/api/auth/foto-profil', formData, {
+      headers: { ...headers, 'Content-Type': 'multipart/form-data' }
+    })
+      .then(function (res) {
+        setUploadingFoto(false);
+        if (res.data.success) {
+          setAdmin(res.data.data);
+          setFotoPreview(null);
+          setFotoTimestamp(Date.now()); // paksa reload gambar, bypass cache
+          // Update global admin state di App.js → sidebar ikut update
+          if (onAdminUpdate) onAdminUpdate(res.data.data);
+          // Sync localStorage
+          var saved = localStorage.getItem('admin');
+          if (saved) {
+            var parsed = JSON.parse(saved);
+            parsed.foto_profil = res.data.data.foto_profil;
+            localStorage.setItem('admin', JSON.stringify(parsed));
+          }
+          showSuccess('Foto profil berhasil diperbarui!');
+        }
+      })
+      .catch(function (err) {
+        setUploadingFoto(false);
+        setFotoPreview(null);
+        var msg = (err.response && err.response.data && err.response.data.message) || 'Gagal upload foto.';
+        showError(msg);
+      });
+  }
+
+  function handleHapusFoto() {
+    if (!window.confirm('Yakin ingin menghapus foto profil?')) return;
+    setDeletingFoto(true);
+    axios.delete(API_BASE_URL + '/api/auth/foto-profil', { headers: headers })
+      .then(function (res) {
+        setDeletingFoto(false);
+        if (res.data.success) {
+          setAdmin(res.data.data);
+          setFotoPreview(null);
+          setFotoTimestamp(Date.now());
+          // Update global admin state di App.js → sidebar ikut update
+          if (onAdminUpdate) onAdminUpdate(res.data.data);
+          // Sync localStorage
+          var saved = localStorage.getItem('admin');
+          if (saved) {
+            var parsed = JSON.parse(saved);
+            parsed.foto_profil = null;
+            localStorage.setItem('admin', JSON.stringify(parsed));
+          }
+          showSuccess('Foto profil berhasil dihapus.');
+        }
+      })
+      .catch(function (err) {
+        setDeletingFoto(false);
+        var msg = (err.response && err.response.data && err.response.data.message) || 'Gagal menghapus foto.';
+        showError(msg);
+      });
+  }
+
   function handleSaveNama() {
     if (!editNama.trim()) { showError('Nama tidak boleh kosong.'); return; }
     setSavingNama(true);
@@ -65,13 +158,14 @@ function ProfilPage() {
         if (res.data.success) {
           setAdmin(res.data.data);
           setIsEditingNama(false);
-          // Update localStorage
           var savedAdmin = localStorage.getItem('admin');
           if (savedAdmin) {
             var parsed = JSON.parse(savedAdmin);
             parsed.nama = res.data.data.nama;
             localStorage.setItem('admin', JSON.stringify(parsed));
           }
+          // Update global admin state di App.js → sidebar ikut update
+          if (onAdminUpdate) onAdminUpdate(res.data.data);
           showSuccess('Nama berhasil diperbarui!');
         }
       })
@@ -154,6 +248,9 @@ function ProfilPage() {
     boxSizing: 'border-box'
   };
 
+  var fotoUrl = fotoPreview || getFotoUrl(admin && admin.foto_profil);
+  var isBusy = uploadingFoto || deletingFoto;
+
   return (
     <div style={{ fontFamily: "'Hanken Grotesk', sans-serif" }}>
       <div className="page-header">
@@ -163,7 +260,6 @@ function ProfilPage() {
         </div>
       </div>
 
-      {/* Alerts */}
       {successMsg && (
         <div className="status-badge hijau animate-fadeIn" style={{
           width: '100%', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px',
@@ -183,24 +279,146 @@ function ProfilPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '24px', alignItems: 'start' }}>
 
-        {/* Left Card: Avatar & Quick Info */}
+        {/* Left Card */}
         <div style={cardStyle}>
           <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-            <div style={{
-              width: '90px', height: '90px', borderRadius: '50%', margin: '0 auto 16px',
-              background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'white', fontSize: '2rem', fontWeight: '800',
-              boxShadow: '0 6px 20px rgba(0,150,136,0.25)'
-            }}>
-              {getInitials(admin ? admin.nama : '')}
+
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              ref={fotoInputRef}
+              style={{ display: 'none' }}
+              onChange={function (e) { handleFotoFileChange(e.target.files[0]); e.target.value = ''; }}
+            />
+
+            {/* Avatar circle with hover overlay */}
+            <div style={{ position: 'relative', width: '100px', height: '100px', margin: '0 auto 16px' }}>
+              <div
+                onClick={function () { if (!isBusy) fotoInputRef.current && fotoInputRef.current.click(); }}
+                onDragOver={function (e) { e.preventDefault(); setIsDragOver(true); }}
+                onDragLeave={function () { setIsDragOver(false); }}
+                onDrop={function (e) {
+                  e.preventDefault();
+                  setIsDragOver(false);
+                  if (!isBusy && e.dataTransfer.files[0]) handleFotoFileChange(e.dataTransfer.files[0]);
+                }}
+                className="avatar-upload-circle"
+                style={{
+                  width: '100px', height: '100px', borderRadius: '50%',
+                  background: fotoUrl ? 'transparent' : 'linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'white', fontSize: '2rem', fontWeight: '800',
+                  boxShadow: isDragOver ? '0 0 0 3px var(--primary)' : '0 6px 20px rgba(0,150,136,0.25)',
+                  cursor: isBusy ? 'not-allowed' : 'pointer',
+                  overflow: 'hidden',
+                  transition: 'box-shadow 0.2s ease',
+                  position: 'relative'
+                }}
+              >
+                {fotoUrl ? (
+                  <img
+                    src={fotoUrl}
+                    alt="Foto Profil"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                    onError={function (e) { e.target.style.display = 'none'; }}
+                  />
+                ) : (
+                  getInitials(admin ? admin.nama : '')
+                )}
+
+                {!isBusy && (
+                  <div className="foto-hover-overlay" style={{
+                    position: 'absolute', inset: 0, borderRadius: '50%',
+                    background: 'rgba(0,0,0,0.45)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    gap: '2px', opacity: 0, transition: 'opacity 0.2s ease',
+                    pointerEvents: 'none'
+                  }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: '1.4rem', color: 'white' }}>photo_camera</span>
+                    <span style={{ fontSize: '0.55rem', color: 'white', fontWeight: '700' }}>GANTI FOTO</span>
+                  </div>
+                )}
+
+                {isBusy && (
+                  <div style={{
+                    position: 'absolute', inset: 0, borderRadius: '50%',
+                    background: 'rgba(0,0,0,0.55)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}>
+                    <TemplateIcon name="loading" size={22} style={{ color: 'white' }} />
+                  </div>
+                )}
+              </div>
+
+              {!isBusy && (
+                <div
+                  onClick={function () { fotoInputRef.current && fotoInputRef.current.click(); }}
+                  title="Upload foto profil"
+                  style={{
+                    position: 'absolute', bottom: '2px', right: '2px',
+                    width: '28px', height: '28px', borderRadius: '50%',
+                    background: 'var(--primary)', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                    cursor: 'pointer', transition: 'transform 0.15s ease',
+                    border: '2px solid var(--bg-card)'
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '0.9rem', color: 'white' }}>edit</span>
+                </div>
+              )}
             </div>
+
             <h3 style={{ fontSize: '1.15rem', fontWeight: '800', marginBottom: '4px', color: 'var(--text-primary)' }}>
               {admin ? admin.nama : '-'}
             </h3>
             <span className="status-badge hijau" style={{ fontSize: '0.75rem', padding: '3px 12px' }}>
               {admin && admin.role === 'superadmin' ? 'Superadmin' : 'Administrator'}
             </span>
+
+            {/* Foto buttons */}
+            <div style={{ marginTop: '14px', display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={function () { fotoInputRef.current && fotoInputRef.current.click(); }}
+                disabled={isBusy}
+                style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.78rem', padding: '6px 12px' }}
+              >
+                {uploadingFoto ? (
+                  <><TemplateIcon name="loading" size={12} /> Mengupload...</>
+                ) : (
+                  <><span className="material-symbols-outlined" style={{ fontSize: '0.9rem' }}>upload</span> Upload Foto</>
+                )}
+              </button>
+              {admin && admin.foto_profil && (
+                <button
+                  type="button"
+                  onClick={handleHapusFoto}
+                  disabled={isBusy}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '5px',
+                    fontSize: '0.78rem', padding: '6px 12px',
+                    background: 'rgba(239,83,80,0.1)',
+                    color: '#ef5350',
+                    border: '1px solid #ef5350',
+                    borderRadius: '8px',
+                    cursor: isBusy ? 'not-allowed' : 'pointer',
+                    fontFamily: "'Hanken Grotesk', sans-serif",
+                    fontWeight: '600'
+                  }}
+                >
+                  {deletingFoto ? (
+                    <><TemplateIcon name="loading" size={12} /> Menghapus...</>
+                  ) : (
+                    <><span className="material-symbols-outlined" style={{ fontSize: '0.9rem' }}>delete</span> Hapus</>
+                  )}
+                </button>
+              )}
+            </div>
+            <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+              JPG, PNG, WEBP &middot; Maks. 2MB
+            </p>
           </div>
 
           <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -228,7 +446,7 @@ function ProfilPage() {
           </div>
         </div>
 
-        {/* Right Column: Edit Forms */}
+        {/* Right Column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
           {/* Edit Nama Card */}
@@ -329,7 +547,6 @@ function ProfilPage() {
             ) : (
               <div className="animate-fadeIn">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {/* Current Password */}
                   <div className="form-group">
                     <label style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
                       Password Lama *
@@ -345,7 +562,6 @@ function ProfilPage() {
                       >{showCurrentPw ? 'visibility_off' : 'visibility'}</span>
                     </div>
                   </div>
-                  {/* New Password */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                     <div className="form-group">
                       <label style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
@@ -378,7 +594,6 @@ function ProfilPage() {
                       </div>
                     </div>
                   </div>
-                  {/* Password strength hint */}
                   {newPassword && (
                     <div style={{ fontSize: '0.76rem', color: newPassword.length >= 6 ? 'var(--status-hijau)' : 'var(--status-merah)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <span className="material-symbols-outlined" style={{ fontSize: '0.9rem' }}>
@@ -440,6 +655,12 @@ function ProfilPage() {
           </div>
         </div>
       </div>
+
+      <style>{`
+        .avatar-upload-circle:hover .foto-hover-overlay {
+          opacity: 1 !important;
+        }
+      `}</style>
     </div>
   );
 }
