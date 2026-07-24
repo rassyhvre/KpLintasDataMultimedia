@@ -188,7 +188,7 @@ function App() {
               <Route path="/dashboard/laporan" element={<LaporanPage />} />
               <Route path="/dashboard/notifikasi" element={<NotifikasiPage socket={socket} />} />
               <Route path="/dashboard/pengaturan" element={<PengaturanPage />} />
-              <Route path="/dashboard/profil" element={<ProfilPage />} />
+              <Route path="/dashboard/profil" element={<ProfilPage onAdminUpdate={setAdmin} />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </div>

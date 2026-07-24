@@ -30,7 +30,7 @@ var Admin = {
 
   // Cari admin berdasarkan ID
   findById: function(id, callback) {
-    var sql = 'SELECT id_admin, username, nama, role, created_at FROM admin WHERE id_admin = ?';
+    var sql = 'SELECT id_admin, username, nama, role, foto_profil, created_at FROM admin WHERE id_admin = ?';
     db.query(sql, [id], function(err, results) {
       if (err) return callback(err, null);
       callback(null, results[0] || null);
@@ -59,6 +59,15 @@ var Admin = {
   updatePassword: function(id, passwordHash, callback) {
     var sql = 'UPDATE admin SET password_hash = ? WHERE id_admin = ?';
     db.query(sql, [passwordHash, id], function(err, result) {
+      if (err) return callback(err, null);
+      callback(null, result);
+    });
+  },
+
+  // Update foto profil admin
+  updateFotoProfil: function(id, fotoProfil, callback) {
+    var sql = 'UPDATE admin SET foto_profil = ? WHERE id_admin = ?';
+    db.query(sql, [fotoProfil, id], function(err, result) {
       if (err) return callback(err, null);
       callback(null, result);
     });

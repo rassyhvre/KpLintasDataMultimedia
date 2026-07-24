@@ -16,6 +16,12 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
     return nama.split(' ').map(function (n) { return n[0]; }).join('').toUpperCase().slice(0, 2);
   }
 
+  function getSidebarFotoUrl(fotoProfil) {
+    if (!fotoProfil) return null;
+    // Tambah timestamp agar browser reload gambar terbaru
+    return API_BASE_URL + fotoProfil + '?t=' + (admin && admin._fotoTs ? admin._fotoTs : Date.now());
+  }
+
   var token = localStorage.getItem('token');
   var headers = { Authorization: 'Bearer ' + token };
 
@@ -146,16 +152,27 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
             <div className="sidebar-avatar" style={{
               width: '42px',
               height: '42px',
-              background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%)',
+              background: admin && admin.foto_profil ? 'transparent' : 'linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%)',
               color: 'white',
               fontSize: '0.95rem',
               fontWeight: '700',
               borderRadius: '50%',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              overflow: 'hidden',
+              flexShrink: 0
             }}>
-              {getInitials(admin ? admin.nama : 'Admin')}
+              {admin && admin.foto_profil ? (
+                <img
+                  src={getSidebarFotoUrl(admin.foto_profil)}
+                  alt="Foto Profil"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                  onError={function(e) { e.target.style.display = 'none'; }}
+                />
+              ) : (
+                getInitials(admin ? admin.nama : 'Admin')
+              )}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

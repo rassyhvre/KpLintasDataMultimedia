@@ -2,8 +2,41 @@ var express = require('express');
 var router = express.Router();
 var bcrypt = require('bcryptjs');
 var jwt = require('jsonwebtoken');
+var multer = require('multer');
+var path = require('path');
+var fs = require('fs');
 var Admin = require('../models/Admin');
 var verifyToken = require('../middleware/auth');
+
+// Multer setup untuk upload foto profil
+var fotoProfilDir = path.join(__dirname, '../public/uploads/foto_profil');
+if (!fs.existsSync(fotoProfilDir)) {
+  fs.mkdirSync(fotoProfilDir, { recursive: true });
+}
+
+var storageAvatar = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, fotoProfilDir);
+  },
+  filename: function (req, file, cb) {
+    var ext = path.extname(file.originalname).toLowerCase();
+    cb(null, 'admin_' + req.adminId + '_' + Date.now() + ext);
+  }
+});
+
+var uploadAvatar = multer({
+  storage: storageAvatar,
+  limits: { fileSize: 2 * 1024 * 1024 }, // max 2MB
+  fileFilter: function (req, file, cb) {
+    var allowed = ['.jpg', '.jpeg', '.png', '.webp'];
+    var ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Hanya file gambar (JPG, PNG, WEBP) yang diperbolehkan.'));
+    }
+  }
+});
 
 /* POST /api/auth/seed - Buat admin pertama kali */
 router.post('/seed', function(req, res) {
@@ -178,6 +211,81 @@ router.put('/password', verifyToken, function(req, res) {
             success: true,
             message: 'Password berhasil diubah!'
           });
+        });
+      });
+    });
+  });
+});
+
+/* POST /api/auth/foto-profil - Upload foto profil admin */
+router.post('/foto-profil', verifyToken, function(req, res, next) {
+  uploadAvatar.single('foto')(req, res, function(err) {
+    if (err) {
+      return res.status(400).json({ success: false, message: err.message || 'Gagal upload foto.' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'File foto tidak ditemukan.' });
+    }
+
+    var fotoPath = '/uploads/foto_profil/' + req.file.filename;
+
+    // Hapus foto lama jika ada
+    Admin.findById(req.adminId, function(findErr, adminData) {
+      if (!findErr && adminData && adminData.foto_profil) {
+        var oldPath = path.join(__dirname, '../public', adminData.foto_profil);
+        if (fs.existsSync(oldPath)) {
+          fs.unlink(oldPath, function() {});
+        }
+      }
+
+      Admin.updateFotoProfil(req.adminId, fotoPath, function(updateErr) {
+        if (updateErr) {
+          return res.status(500).json({ success: false, message: 'Gagal menyimpan foto profil.', error: updateErr.message });
+        }
+
+        Admin.findById(req.adminId, function(err2, updatedAdmin) {
+          if (err2 || !updatedAdmin) {
+            return res.status(500).json({ success: false, message: 'Gagal mengambil data admin.' });
+          }
+          res.json({
+            success: true,
+            message: 'Foto profil berhasil diperbarui!',
+            data: updatedAdmin
+          });
+        });
+      });
+    });
+  });
+});
+
+/* DELETE /api/auth/foto-profil - Hapus foto profil admin */
+router.delete('/foto-profil', verifyToken, function(req, res) {
+  Admin.findById(req.adminId, function(findErr, adminData) {
+    if (findErr || !adminData) {
+      return res.status(404).json({ success: false, message: 'Admin tidak ditemukan.' });
+    }
+
+    if (adminData.foto_profil) {
+      var oldPath = path.join(__dirname, '../public', adminData.foto_profil);
+      if (fs.existsSync(oldPath)) {
+        fs.unlink(oldPath, function() {});
+      }
+    }
+
+    Admin.updateFotoProfil(req.adminId, null, function(updateErr) {
+      if (updateErr) {
+        return res.status(500).json({ success: false, message: 'Gagal menghapus foto profil.', error: updateErr.message });
+      }
+
+      Admin.findById(req.adminId, function(err2, updatedAdmin) {
+        if (err2 || !updatedAdmin) {
+          return res.status(500).json({ success: false, message: 'Gagal mengambil data admin.' });
+        }
+        res.json({
+          success: true,
+          message: 'Foto profil berhasil dihapus.',
+          data: updatedAdmin
         });
       });
     });
