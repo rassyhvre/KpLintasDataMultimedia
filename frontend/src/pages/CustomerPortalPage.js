@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
+import { useLogo } from '../context/LogoContext';
 
 function CustomerPortalPage({ onLogout }) {
   var location = useLocation();
+  var { logoUrl } = useLogo();
   var initialTab = (location.state && location.state.activeTab) || 'billing';
   var [activeTab, setActiveTab] = useState(initialTab); // 'billing', 'history', 'profile'
   var [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -826,7 +828,7 @@ function CustomerPortalPage({ onLogout }) {
           {isDesktopCollapsed ? (
             <div style={{ width: 40, height: 40, background: 'linear-gradient(135deg, var(--primary, #006876) 0%, var(--primary-light, #0891b2) 100%)', color: 'white', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>LD</div>
           ) : (
-            <img src={process.env.PUBLIC_URL + '/logo_ldm.png'} alt="Logo LDM" className="portal-sidebar-logo" />
+            <img src={logoUrl} alt="Logo LDM" className="portal-sidebar-logo" />
           )}
         </div>
 

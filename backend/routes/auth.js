@@ -110,4 +110,78 @@ router.get('/me', verifyToken, function(req, res) {
   });
 });
 
+/* PUT /api/auth/profile - Update admin profile (nama) */
+router.put('/profile', verifyToken, function(req, res) {
+  var { nama } = req.body;
+
+  if (!nama || !nama.trim()) {
+    return res.status(400).json({ success: false, message: 'Nama tidak boleh kosong.' });
+  }
+
+  Admin.updateProfile(req.adminId, { nama: nama.trim() }, function(err, result) {
+    if (err) {
+      return res.status(500).json({ success: false, message: 'Gagal memperbarui profil.', error: err.message });
+    }
+
+    // Return updated admin data
+    Admin.findById(req.adminId, function(findErr, admin) {
+      if (findErr || !admin) {
+        return res.status(500).json({ success: false, message: 'Gagal mengambil data admin.' });
+      }
+
+      res.json({
+        success: true,
+        message: 'Profil berhasil diperbarui!',
+        data: admin
+      });
+    });
+  });
+});
+
+/* PUT /api/auth/password - Change admin password */
+router.put('/password', verifyToken, function(req, res) {
+  var { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ success: false, message: 'Password lama dan baru harus diisi.' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ success: false, message: 'Password baru minimal 6 karakter.' });
+  }
+
+  Admin.findByIdWithPassword(req.adminId, function(err, admin) {
+    if (err || !admin) {
+      return res.status(500).json({ success: false, message: 'Admin tidak ditemukan.' });
+    }
+
+    bcrypt.compare(currentPassword, admin.password_hash, function(compareErr, isMatch) {
+      if (compareErr) {
+        return res.status(500).json({ success: false, message: 'Error saat verifikasi password.' });
+      }
+
+      if (!isMatch) {
+        return res.status(401).json({ success: false, message: 'Password lama tidak sesuai.' });
+      }
+
+      bcrypt.hash(newPassword, 10, function(hashErr, hashedPassword) {
+        if (hashErr) {
+          return res.status(500).json({ success: false, message: 'Gagal hash password baru.' });
+        }
+
+        Admin.updatePassword(req.adminId, hashedPassword, function(updateErr) {
+          if (updateErr) {
+            return res.status(500).json({ success: false, message: 'Gagal memperbarui password.', error: updateErr.message });
+          }
+
+          res.json({
+            success: true,
+            message: 'Password berhasil diubah!'
+          });
+        });
+      });
+    });
+  });
+});
+
 module.exports = router;

@@ -1,7 +1,9 @@
 import React, { Suspense } from 'react';
 import Spline from '@splinetool/react-spline';
+import { useLogo } from '../../context/LogoContext';
 
 function HeroSplineScene({ scene = "https://prod.spline.design/oh9QGSrrXyqUjitX/scene.splinecode", logoCoverColor = "#ffffff" }) {
+  var { logoUrl } = useLogo();
   const handleLoad = (splineApp) => {
     if (splineApp && typeof splineApp.setBackgroundColor === 'function') {
       try {
@@ -83,7 +85,7 @@ function HeroSplineScene({ scene = "https://prod.spline.design/oh9QGSrrXyqUjitX/
         justifyContent: 'center',
         gap: '12px'
       }}>
-        <img src={process.env.PUBLIC_URL + '/logo_ldm.png'} alt="Logo LDM" style={{ height: '32px' }} />
+        <img src={logoUrl} alt="Logo LDM" style={{ height: '32px' }} />
         <span style={{
           fontFamily: "'Open Sans', sans-serif",
           fontWeight: 700,

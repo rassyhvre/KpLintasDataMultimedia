@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
+import { useLogo } from '../context/LogoContext';
 
 function CustomerLoginPage({ onLogin, title = "Portal Pembayaran" }) {
   var { userEmail } = useParams();
+  var { logoUrl } = useLogo();
   var [email, setEmail] = useState(userEmail ? decodeURIComponent(userEmail) : '');
   var [otp, setOtp] = useState('');
   var [step, setStep] = useState(1); // 1: input phone, 2: input OTP
@@ -103,7 +105,7 @@ function CustomerLoginPage({ onLogin, title = "Portal Pembayaran" }) {
           {/* Logo */}
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
             <img
-              src={process.env.PUBLIC_URL + '/logo_ldm.png'}
+              src={logoUrl}
               alt="Logo Lintas Data Multimedia"
               style={{
                 height: 75,
