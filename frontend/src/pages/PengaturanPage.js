@@ -1,7 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
+import { API_BASE_URL } from '../config';
+import { useLogo } from '../context/LogoContext';
 import TemplateIcon from '../components/TemplateIcon';
 
 function PengaturanPage() {
+  var { refreshLogo } = useLogo();
   var [activeTab, setActiveTab] = useState('umum'); // 'umum', 'mikrotik', 'midtrans', 'reminder'
   var [saving, setSaving] = useState(false);
   var [successMsg, setSuccessMsg] = useState('');
@@ -14,6 +18,15 @@ function PengaturanPage() {
     alamat: 'Jl. Raya Saronggi No. 45, Sumenep, Jawa Timur',
     logo: null
   });
+
+  // Logo upload state
+  var [logoPreview, setLogoPreview] = useState(null);
+  var [logoFile, setLogoFile] = useState(null);
+  var [uploading, setUploading] = useState(false);
+  var [currentLogo, setCurrentLogo] = useState(null);
+  var [isDefaultLogo, setIsDefaultLogo] = useState(true);
+  var [dragOver, setDragOver] = useState(false);
+  var logoInputRef = useRef(null);
 
   // Mikrotik settings state
   var [mikrotik, setMikrotik] = useState({
@@ -39,6 +52,128 @@ function PengaturanPage() {
     waTemplate: 'Halo [Nama],\n\nIni adalah pengingat otomatis dari Lintas Data Multimedia.\nTagihan internet Anda untuk periode [Periode] sebesar Rp [Nominal] akan jatuh tempo pada [JatuhTempo].\n\nSilakan lakukan pembayaran agar layanan tidak terputus. Terima kasih.',
     autoSend: true
   });
+
+  // Fetch current logo on mount
+  useEffect(function () {
+    var token = localStorage.getItem('token');
+    if (!token) return;
+    axios.get(API_BASE_URL + '/api/pengaturan/logo', {
+      headers: { Authorization: 'Bearer ' + token }
+    }).then(function (res) {
+      if (res.data.success && res.data.data) {
+        setCurrentLogo(API_BASE_URL + res.data.data.logo_url);
+        setIsDefaultLogo(!!res.data.data.is_default);
+      }
+    }).catch(function () { /* silently fail */ });
+  }, []);
+
+  // Handle logo file selection
+  var handleLogoSelect = function (file) {
+    if (!file) return;
+
+    // Validate file type
+    var allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+    if (allowedTypes.indexOf(file.type) === -1) {
+      alert('Format file tidak didukung. Gunakan PNG atau JPG.');
+      return;
+    }
+
+    // Validate file size (2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Ukuran file melebihi batas maksimal 2MB.');
+      return;
+    }
+
+    setLogoFile(file);
+    var reader = new FileReader();
+    reader.onloadend = function () {
+      setLogoPreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle logo upload to server
+  var handleLogoUpload = function () {
+    if (!logoFile) return;
+
+    var token = localStorage.getItem('token');
+    if (!token) {
+      alert('Sesi Anda telah berakhir. Silakan login kembali.');
+      return;
+    }
+
+    setUploading(true);
+    var formData = new FormData();
+    formData.append('logo', logoFile);
+
+    axios.post(API_BASE_URL + '/api/pengaturan/logo', formData, {
+      headers: {
+        Authorization: 'Bearer ' + token,
+        'Content-Type': 'multipart/form-data'
+      }
+    }).then(function (res) {
+      setUploading(false);
+      if (res.data.success) {
+        setCurrentLogo(API_BASE_URL + res.data.data.logo_url + '?t=' + Date.now());
+        setIsDefaultLogo(false);
+        setLogoFile(null);
+        setLogoPreview(null);
+        setSuccessMsg('Logo perusahaan berhasil diperbarui!');
+        refreshLogo();
+        setTimeout(function () { setSuccessMsg(''); }, 4000);
+      }
+    }).catch(function (err) {
+      setUploading(false);
+      var msg = (err.response && err.response.data && err.response.data.message) || 'Gagal mengunggah logo.';
+      alert(msg);
+    });
+  };
+
+  // Handle logo reset to default
+  var handleLogoReset = function () {
+    if (!window.confirm('Reset logo ke default?')) return;
+
+    var token = localStorage.getItem('token');
+    axios.delete(API_BASE_URL + '/api/pengaturan/logo', {
+      headers: { Authorization: 'Bearer ' + token }
+    }).then(function (res) {
+      if (res.data.success) {
+        setCurrentLogo(API_BASE_URL + '/logo_ldm.png');
+        setIsDefaultLogo(true);
+        setLogoFile(null);
+        setLogoPreview(null);
+        setSuccessMsg('Logo berhasil di-reset ke default.');
+        refreshLogo();
+        setTimeout(function () { setSuccessMsg(''); }, 4000);
+      }
+    }).catch(function () {
+      alert('Gagal mereset logo.');
+    });
+  };
+
+  // Cancel logo selection (before upload)
+  var handleLogoCancelSelect = function () {
+    setLogoFile(null);
+    setLogoPreview(null);
+    if (logoInputRef.current) logoInputRef.current.value = '';
+  };
+
+  // Drag and drop handlers
+  var handleDragOver = function (e) {
+    e.preventDefault();
+    setDragOver(true);
+  };
+  var handleDragLeave = function (e) {
+    e.preventDefault();
+    setDragOver(false);
+  };
+  var handleDrop = function (e) {
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleLogoSelect(e.dataTransfer.files[0]);
+    }
+  };
 
   var handleSave = function (e) {
     e.preventDefault();
@@ -206,19 +341,121 @@ function PengaturanPage() {
                   />
                 </div>
 
-                <div style={{
-                  border: '1.5px dashed var(--border-color)',
-                  borderRadius: '8px',
-                  padding: '24px',
-                  textAlign: 'center',
-                  background: 'var(--bg-secondary)',
-                  cursor: 'pointer'
-                }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: '2.5rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                    cloud_upload
-                  </span>
-                  <div style={{ fontSize: '0.88rem', fontWeight: '700' }}>Unggah Logo Baru</div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '2px' }}>Format PNG/JPG maksimal 2MB</div>
+                {/* Logo Upload Section */}
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', marginBottom: '8px', display: 'block', color: 'var(--text-secondary)' }}>Logo Perusahaan</label>
+
+                <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+                  {/* Current / Preview Logo */}
+                  <div style={{
+                    width: '120px',
+                    height: '120px',
+                    borderRadius: '12px',
+                    border: '1.5px solid var(--border-color)',
+                    background: 'var(--bg-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    flexShrink: 0
+                  }}>
+                    {(logoPreview || currentLogo) ? (
+                      <img
+                        src={logoPreview || currentLogo}
+                        alt="Logo Perusahaan"
+                        style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '8px' }}
+                      />
+                    ) : (
+                      <span className="material-symbols-outlined" style={{ fontSize: '3rem', color: 'var(--text-muted)' }}>image</span>
+                    )}
+                  </div>
+
+                  {/* Upload / Drag Area */}
+                  <div style={{ flex: 1 }}>
+                    <div
+                      onClick={function () { if (!uploading) logoInputRef.current.click(); }}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      style={{
+                        border: dragOver ? '2px dashed var(--primary)' : '1.5px dashed var(--border-color)',
+                        borderRadius: '8px',
+                        padding: '20px',
+                        textAlign: 'center',
+                        background: dragOver ? 'var(--primary-glow)' : 'var(--bg-secondary)',
+                        cursor: uploading ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s ease',
+                        opacity: uploading ? 0.6 : 1
+                      }}
+                    >
+                      <input
+                        ref={logoInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg"
+                        style={{ display: 'none' }}
+                        onChange={function (e) {
+                          if (e.target.files && e.target.files[0]) {
+                            handleLogoSelect(e.target.files[0]);
+                          }
+                        }}
+                      />
+                      <span className="material-symbols-outlined" style={{ fontSize: '2rem', color: dragOver ? 'var(--primary)' : 'var(--text-muted)', marginBottom: '4px' }}>
+                        cloud_upload
+                      </span>
+                      <div style={{ fontSize: '0.85rem', fontWeight: '700' }}>
+                        {logoFile ? logoFile.name : 'Klik atau seret file ke sini'}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        Format PNG/JPG maksimal 2MB
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    {logoFile && (
+                      <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={handleLogoUpload}
+                          disabled={uploading}
+                          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                        >
+                          {uploading ? (
+                            <><TemplateIcon name="loading" size={14} /> Mengunggah...</>
+                          ) : (
+                            <><span className="material-symbols-outlined" style={{ fontSize: '1rem' }}>upload</span> Simpan Logo</>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={handleLogoCancelSelect}
+                          disabled={uploading}
+                        >
+                          Batal
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Reset to default button */}
+                    {!logoFile && !isDefaultLogo && currentLogo && (
+                      <button
+                        type="button"
+                        onClick={handleLogoReset}
+                        style={{
+                          marginTop: '10px',
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--text-muted)',
+                          fontSize: '0.76rem',
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          padding: 0
+                        }}
+                      >
+                        Reset ke logo default
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

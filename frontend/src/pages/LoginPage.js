@@ -3,8 +3,10 @@ import axios from 'axios';
 import TemplateIcon from '../components/TemplateIcon';
 
 import { API_BASE_URL } from '../config';
+import { useLogo } from '../context/LogoContext';
 
 function LoginPage({ onLogin }) {
+  var { logoUrl } = useLogo();
   var [username, setUsername] = useState('');
   var [password, setPassword] = useState('');
   var [error, setError] = useState('');
@@ -41,7 +43,7 @@ function LoginPage({ onLogin }) {
         <div className="login-card">
           <div className="login-logo">
             <img
-              src={process.env.PUBLIC_URL + '/logo_ldm.png'}
+              src={logoUrl}
               alt="Logo Lintas Data Multimedia"
               className="login-logo-img"
             />

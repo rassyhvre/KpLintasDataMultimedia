@@ -35,6 +35,33 @@ var Admin = {
       if (err) return callback(err, null);
       callback(null, results[0] || null);
     });
+  },
+
+  // Cari admin berdasarkan ID (termasuk password_hash untuk verifikasi)
+  findByIdWithPassword: function(id, callback) {
+    var sql = 'SELECT * FROM admin WHERE id_admin = ?';
+    db.query(sql, [id], function(err, results) {
+      if (err) return callback(err, null);
+      callback(null, results[0] || null);
+    });
+  },
+
+  // Update nama admin
+  updateProfile: function(id, data, callback) {
+    var sql = 'UPDATE admin SET nama = ? WHERE id_admin = ?';
+    db.query(sql, [data.nama, id], function(err, result) {
+      if (err) return callback(err, null);
+      callback(null, result);
+    });
+  },
+
+  // Update password admin
+  updatePassword: function(id, passwordHash, callback) {
+    var sql = 'UPDATE admin SET password_hash = ? WHERE id_admin = ?';
+    db.query(sql, [passwordHash, id], function(err, result) {
+      if (err) return callback(err, null);
+      callback(null, result);
+    });
   }
 };
 

@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
+import { useLogo } from '../context/LogoContext';
 
 function Sidebar({ admin, onLogout, socket, collapsed }) {
   var location = useLocation();
+  var { logoUrl } = useLogo();
   var [profileOpen, setProfileOpen] = useState(false);
   var [pendingCount, setPendingCount] = useState(0);
   var [pembayaranOpen, setPembayaranOpen] = useState(false);
@@ -56,7 +58,7 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
       items: [
         { path: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
         { path: '/dashboard/pelanggan', label: 'Pelanggan', icon: 'group' },
-        { path: '/dashboard/pelanggan?action=tagihan', label: 'Tagihan', icon: 'receipt_long' },
+        { path: '/dashboard/tagihan', label: 'Tagihan', icon: 'receipt_long' },
         { 
           path: '/dashboard/pembayaran', 
           label: 'Pembayaran', 
@@ -80,7 +82,6 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
     {
       section: 'Lainnya',
       items: [
-        { path: '/dashboard/laporan?action=pengeluaran', label: 'Pengeluaran', icon: 'account_balance_wallet' },
         { path: '/dashboard/pengaturan', label: 'Pengaturan', icon: 'settings' }
       ]
     }
@@ -110,7 +111,7 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
           />
         ) : (
           <img
-            src={process.env.PUBLIC_URL + '/logo_ldm.png'}
+            src={logoUrl}
             alt="Logo ESP"
             style={{ width: '135px', height: 'auto', maxHeight: '42px', objectFit: 'contain' }}
           />
@@ -195,8 +196,10 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
                 alignItems: 'center',
                 gap: '8px',
                 cursor: 'pointer',
-                borderRadius: '6px'
+                borderRadius: '6px',
+                textDecoration: 'none'
               }}
+              onClick={function() { window.location.href = '/dashboard/profil'; }}
               onMouseEnter={function(e) { e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
               onMouseLeave={function(e) { e.currentTarget.style.background = 'transparent'; }}
               >

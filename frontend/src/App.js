@@ -22,6 +22,8 @@ import CustomerPortalPage from './pages/CustomerPortalPage';
 import LandingPage from './pages/LandingPage';
 import NotifikasiPage from './pages/NotifikasiPage';
 import PengaturanPage from './pages/PengaturanPage';
+import TagihanPage from './pages/TagihanPage';
+import ProfilPage from './pages/ProfilPage';
 
 function App() {
   // Admin authentication state
@@ -178,6 +180,7 @@ function App() {
             <Routes>
               <Route path="/dashboard" element={<DashboardPage socket={socket} />} />
               <Route path="/dashboard/pelanggan" element={<PelangganPage socket={socket} />} />
+              <Route path="/dashboard/tagihan" element={<TagihanPage socket={socket} />} />
               <Route path="/dashboard/paket" element={<PaketPage />} />
               <Route path="/dashboard/mikrotik" element={<MikrotikPage socket={socket} />} />
               <Route path="/dashboard/reminder-logs" element={<ReminderLogPage />} />
@@ -185,6 +188,7 @@ function App() {
               <Route path="/dashboard/laporan" element={<LaporanPage />} />
               <Route path="/dashboard/notifikasi" element={<NotifikasiPage socket={socket} />} />
               <Route path="/dashboard/pengaturan" element={<PengaturanPage />} />
+              <Route path="/dashboard/profil" element={<ProfilPage />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </div>
