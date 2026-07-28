@@ -392,7 +392,7 @@ function CustomerPortalPage({ onLogout }) {
         return (
           <div className="portal-card" style={{ textAlign: 'center', padding: '48px 20px' }}>
             <span className="material-symbols-outlined" style={{ fontSize: 56, color: 'var(--status-hijau)', marginBottom: 16, display: 'block' }}>check_circle</span>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: 8, color: 'var(--status-hijau)' }}>Tagihan Lunas Pada Bulan Ini</h3>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: 8, color: 'var(--status-hijau)' }}>Tagihan Lunas Untuk Bulan Ini</h3>
             <p style={{ color: 'var(--md-on-surface-variant)', fontSize: '0.88rem' }}>Terima kasih atas pembayaran Anda. Layanan internet Anda aktif.</p>
           </div>
         );
