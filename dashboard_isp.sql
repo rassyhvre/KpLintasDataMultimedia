@@ -386,7 +386,7 @@ INSERT INTO `tagihan` (`id_tagihan`, `id_pelanggan`, `periode`, `nominal`, `stat
 --
 ALTER TABLE `laporan_bulanan`
   ADD PRIMARY KEY (`id_laporan`),
-  ADD UNIQUE KEY `uq_laporan_periode` (`periode`),
+  ADD KEY `idx_laporan_periode` (`periode`),
   ADD KEY `fk_laporan_admin` (`id_admin`);
 
 --

@@ -2,6 +2,7 @@ var express = require('express');
 var router = express.Router();
 var db = require('../config/db');
 var Pengeluaran = require('../models/Pengeluaran');
+var LaporanBulanan = require('../models/LaporanBulanan');
 var verifyToken = require('../middleware/auth');
 var ExcelJS = require('exceljs');
 var path = require('path'); // Wajib ditambahkan untuk memanggil path template
@@ -495,6 +496,44 @@ router.get('/export-excel', function (req, res) {
         await workbook.xlsx.write(res);
         res.end();
 
+        // Catat riwayat log unduhan ke tabel laporan_bulanan
+        try {
+          var adminId = req.adminId || 1;
+          var logPeriode = (periode && periode.length <= 7) ? periode : selectedYear;
+          var logPemasukan = 0;
+          var logPengeluaran = 0;
+
+          if (periode && periode.includes('-')) {
+            var targetBulan = periode.split('-')[1];
+            logPemasukan = allIncomes
+              .filter(function (inc) { return inc.bulan_periode === targetBulan; })
+              .reduce(function (sum, item) { return sum + parseFloat(item.nominal || 0); }, 0);
+            logPengeluaran = allExpenses
+              .filter(function (exp) { return exp.bulan_pengeluaran === targetBulan; })
+              .reduce(function (sum, item) { return sum + parseFloat(item.nominal || 0); }, 0);
+          } else {
+            logPemasukan = allIncomes.reduce(function (sum, item) { return sum + parseFloat(item.nominal || 0); }, 0);
+            logPengeluaran = allExpenses.reduce(function (sum, item) { return sum + parseFloat(item.nominal || 0); }, 0);
+          }
+
+          LaporanBulanan.create({
+            id_admin: adminId,
+            periode: logPeriode,
+            total_pemasukan: logPemasukan,
+            total_pengeluaran: logPengeluaran,
+            file_path: downloadFilename,
+            tipe_generate: 'manual'
+          }, function (logErr) {
+            if (logErr) {
+              console.error('[Reports] Gagal mencatat riwayat ke laporan_bulanan:', logErr.message);
+            } else {
+              console.log('[Reports] Berhasil mencatat riwayat unduhan laporan:', downloadFilename);
+            }
+          });
+        } catch (logCatchErr) {
+          console.error('[Reports] Error pada pencatatan log laporan_bulanan:', logCatchErr.message);
+        }
+
       } catch (error) {
         console.error('Error saat membuat 12 sheet Excel:', error);
         res.status(500).send('Gagal mengekspor laporan: ' + error.message);
@@ -639,6 +678,36 @@ router.get('/daily-trend', function (req, res) {
           days: dailyData
         }
       });
+    });
+  });
+});
+
+/* GET /api/reports/history - Get list of report download logs from laporan_bulanan */
+router.get('/history', function (req, res) {
+  var limit = req.query.limit || 50;
+  LaporanBulanan.getAll(limit, function (err, results) {
+    if (err) {
+      console.error('[Reports] Error mengambil riwayat laporan:', err);
+      return res.status(500).json({ success: false, message: 'Gagal mengambil riwayat unduhan laporan.' });
+    }
+    res.json({
+      success: true,
+      data: results || []
+    });
+  });
+});
+
+/* DELETE /api/reports/history/:id - Delete a history log item */
+router.delete('/history/:id', function (req, res) {
+  var id = req.params.id;
+  LaporanBulanan.delete(id, function (err) {
+    if (err) {
+      console.error('[Reports] Error menghapus riwayat laporan:', err);
+      return res.status(500).json({ success: false, message: 'Gagal menghapus log riwayat laporan.' });
+    }
+    res.json({
+      success: true,
+      message: 'Log riwayat laporan berhasil dihapus.'
     });
   });
 });

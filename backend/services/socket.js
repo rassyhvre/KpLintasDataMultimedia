@@ -31,7 +31,7 @@ var SocketService = {
       // Join admin room if valid admin token is provided
       var token = socket.handshake.auth?.token || socket.handshake.query?.token;
       if (token) {
-        jwt.verify(token, process.env.JWT_SECRET, function(err, decoded) {
+        jwt.verify(token, (process.env.JWT_SECRET || 'supersecret_isp_dashboard_jwt_key_2026!'), function(err, decoded) {
           if (!err && decoded && decoded.id) {
             socket.join('admin');
             console.log(`Socket ${socket.id} joined 'admin' room`);

@@ -63,6 +63,71 @@ pool.getConnection((err, connection) => {
       }
     });
 
+    // Pengecekan kolom tabel admin (password_hash -> password)
+    connection.query("SHOW COLUMNS FROM admin LIKE 'password_hash'", (err, rows) => {
+      if (!err && rows && rows.length > 0) {
+        connection.query("ALTER TABLE admin CHANGE COLUMN password_hash password VARCHAR(255) NOT NULL", () => {});
+      }
+    });
+
+    // Pengecekan kolom tabel paket_layanan (id -> id_paket)
+    connection.query("SHOW COLUMNS FROM paket_layanan LIKE 'id'", (err, rows) => {
+      if (!err && rows && rows.length > 0) {
+        connection.query("ALTER TABLE paket_layanan CHANGE COLUMN id id_paket INT NOT NULL AUTO_INCREMENT", () => {});
+      }
+    });
+
+    // Pengecekan kolom tabel rekening_pembayaran (id -> id_rekening)
+    connection.query("SHOW COLUMNS FROM rekening_pembayaran LIKE 'id'", (err, rows) => {
+      if (!err && rows && rows.length > 0) {
+        connection.query("ALTER TABLE rekening_pembayaran CHANGE COLUMN id id_rekening INT NOT NULL AUTO_INCREMENT", () => {});
+      }
+    });
+
+    // Pengecekan kolom tabel pengaturan (kunci -> id_pengaturan)
+    connection.query("SHOW COLUMNS FROM pengaturan LIKE 'kunci'", (err, rows) => {
+      if (!err && rows && rows.length > 0) {
+        connection.query("ALTER TABLE pengaturan CHANGE COLUMN kunci id_pengaturan VARCHAR(100) NOT NULL", () => {});
+      }
+    });
+
+    // Pengecekan kolom tabel pelanggan (nik & foto)
+    connection.query("SHOW COLUMNS FROM pelanggan LIKE 'nik'", (err, rows) => {
+      if (!err && rows && rows.length === 0) {
+        connection.query("ALTER TABLE pelanggan ADD COLUMN nik VARCHAR(20) DEFAULT NULL", () => {});
+      }
+    });
+    connection.query("SHOW COLUMNS FROM pelanggan LIKE 'foto'", (err, rows) => {
+      if (!err && rows && rows.length === 0) {
+        connection.query("ALTER TABLE pelanggan ADD COLUMN foto VARCHAR(255) DEFAULT NULL", () => {});
+      }
+    });
+
+    // Pengecekan struktur tabel laporan_bulanan untuk riwayat unduhan
+    connection.query(`
+      CREATE TABLE IF NOT EXISTS laporan_bulanan (
+        id_laporan INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+        id_admin INT UNSIGNED NOT NULL,
+        periode VARCHAR(7) NOT NULL,
+        total_pemasukan DECIMAL(14,2) NOT NULL DEFAULT '0.00',
+        total_pengeluaran DECIMAL(14,2) NOT NULL DEFAULT '0.00',
+        file_path VARCHAR(255) DEFAULT NULL,
+        tipe_generate ENUM('otomatis','manual') NOT NULL DEFAULT 'manual',
+        generated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_laporan_periode (periode),
+        KEY fk_laporan_admin (id_admin)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `, () => {
+      // Lepas UNIQUE index jika ada agar bisa mencatat unduhan berkali-kali untuk periode yang sama
+      connection.query("SHOW INDEX FROM laporan_bulanan WHERE Key_name = 'uq_laporan_periode'", (idxErr, idxRows) => {
+        if (!idxErr && idxRows && idxRows.length > 0) {
+          connection.query("ALTER TABLE laporan_bulanan DROP INDEX uq_laporan_periode", (dropErr) => {
+            if (!dropErr) console.log('[DB Migration] Index uq_laporan_periode berhasil dilepas agar riwayat unduhan dapat dicatat berulang.');
+          });
+        }
+      });
+    });
+
     connection.release(); 
   }
 });

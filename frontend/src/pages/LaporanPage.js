@@ -17,6 +17,9 @@ function LaporanPage() {
   var [hoveredIdx, setHoveredIdx] = useState(null);
   var [expensePage, setExpensePage] = useState(1);
   var [incomePage, setIncomePage] = useState(1);
+  var [logPage, setLogPage] = useState(1);
+  var [reportLogs, setReportLogs] = useState([]);
+  var [logsLoading, setLogsLoading] = useState(false);
   var [loading, setLoading] = useState(true);
 
   // Modals state for CRUD Expenses
@@ -36,10 +39,39 @@ function LaporanPage() {
   var token = localStorage.getItem('token');
   var headers = { Authorization: 'Bearer ' + token };
 
+  async function fetchReportLogs() {
+    setLogsLoading(true);
+    try {
+      var res = await axios.get(`${API_BASE_URL}/api/reports/history`, { headers: headers });
+      if (res.data && res.data.success) {
+        setReportLogs(res.data.data || []);
+      }
+    } catch (err) {
+      console.error('Gagal memuat log riwayat laporan:', err);
+    } finally {
+      setLogsLoading(false);
+    }
+  }
+
+  async function handleDeleteLog(id) {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus catatan riwayat unduhan ini?')) {
+      return;
+    }
+    try {
+      var res = await axios.delete(`${API_BASE_URL}/api/reports/history/${id}`, { headers: headers });
+      alert(res.data.message || 'Log berhasil dihapus.');
+      fetchReportLogs();
+    } catch (err) {
+      alert('Gagal menghapus log riwayat: ' + (err.response?.data?.message || err.message));
+    }
+  }
+
   useEffect(function () {
     fetchData();
+    fetchReportLogs();
     setExpensePage(1);
     setIncomePage(1);
+    setLogPage(1);
   }, [periode]);
 
   useEffect(function () {
@@ -173,6 +205,11 @@ function LaporanPage() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+
+      // Segarkan log riwayat unduhan laporan setelah berhasil unduh
+      setTimeout(function () {
+        fetchReportLogs();
+      }, 1000);
     } catch (err) {
       alert('Gagal mendownload laporan: ' + err.message);
     }
@@ -216,6 +253,9 @@ function LaporanPage() {
 
   var totalIncomesPages = Math.ceil(incomes.length / 10) || 1;
   var currentIncomes = incomes.slice((incomePage - 1) * 10, incomePage * 10);
+
+  var totalLogsPages = Math.ceil(reportLogs.length / 10) || 1;
+  var currentLogs = reportLogs.slice((logPage - 1) * 10, logPage * 10);
 
   return (
     <div>
@@ -730,6 +770,123 @@ function LaporanPage() {
           )}
         </div>
 
+      </div>
+
+      {/* Section Riwayat & Log Unduhan Laporan (laporan_bulanan) */}
+      <div className="table-container animate-fadeIn" style={{ marginBottom: '32px' }}>
+        <div className="table-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          <div>
+            <h3 style={{ margin: 0, display: 'flex', alignItems: 'center' }}>
+              <TemplateIcon name="chart-up" size={18} style={{ marginRight: '8px', color: 'var(--primary)' }} />
+              Riwayat & Log Unduhan Laporan ({reportLogs.length})
+            </h3>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              Tercatat otomatis ke tabel database <code>laporan_bulanan</code> setiap kali laporan diekspor atau diunduh.
+            </p>
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={fetchReportLogs} disabled={logsLoading}>
+            <TemplateIcon name="loading" size={14} style={{ marginRight: '6px' }} />
+            {logsLoading ? 'Memuat...' : 'Segarkan Log'}
+          </button>
+        </div>
+
+        {logsLoading ? (
+          <div style={{ padding: '30px' }}><div className="skeleton skeleton-text" /></div>
+        ) : reportLogs.length === 0 ? (
+          <div className="table-empty">
+            <div className="table-empty-icon"><TemplateIcon name="chart-up" size={28} /></div>
+            <p>Belum ada riwayat unduhan laporan. Klik tombol <strong>"Unduh Laporan Excel"</strong> di atas untuk membuat catatan baru.</p>
+          </div>
+        ) : (
+          <>
+            <div style={{ overflowX: 'auto', width: '100%' }}>
+              <table className="data-table" style={{ minWidth: '850px' }}>
+                <thead>
+                  <tr>
+                    <th>No</th>
+                    <th>Waktu Unduh</th>
+                    <th>Periode</th>
+                    <th>Nama Berkas Laporan</th>
+                    <th>Rekap Pemasukan</th>
+                    <th>Rekap Pengeluaran</th>
+                    <th>Admin / Petugas</th>
+                    <th>Tipe</th>
+                    <th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentLogs.map(function (log, idx) {
+                    return (
+                      <tr key={log.id_laporan}>
+                        <td style={{ color: 'var(--text-muted)' }}>{(logPage - 1) * 10 + idx + 1}</td>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>
+                            {new Date(log.generated_at).toLocaleDateString('id-ID', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric'
+                            })}
+                          </div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                            {new Date(log.generated_at).toLocaleTimeString('id-ID', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })} WIB
+                          </div>
+                        </td>
+                        <td>
+                          <code style={{ fontSize: '0.85rem', fontWeight: 600 }}>{log.periode}</code>
+                        </td>
+                        <td style={{ fontSize: '0.85rem' }}>
+                          <span title={log.file_path} style={{ color: 'var(--text-primary)', wordBreak: 'break-all' }}>
+                            {log.file_path || '-'}
+                          </span>
+                        </td>
+                        <td style={{ fontWeight: 700, color: 'var(--success)' }}>
+                          {formatUang(log.total_pemasukan)}
+                        </td>
+                        <td style={{ fontWeight: 700, color: 'var(--status-merah)' }}>
+                          {formatUang(log.total_pengeluaran)}
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{log.nama_admin || 'Administrator'}</div>
+                          {log.email_admin && (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{log.email_admin}</div>
+                          )}
+                        </td>
+                        <td>
+                          <span style={{
+                            fontSize: '0.75rem',
+                            textTransform: 'uppercase',
+                            fontWeight: 700,
+                            padding: '3px 8px',
+                            borderRadius: '12px',
+                            backgroundColor: log.tipe_generate === 'manual' ? 'rgba(40, 98, 146, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                            color: log.tipe_generate === 'manual' ? '#286292' : '#10b981'
+                          }}>
+                            {log.tipe_generate}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            className="btn btn-danger btn-sm"
+                            onClick={function () { handleDeleteLog(log.id_laporan); }}
+                            title="Hapus baris log ini"
+                          >
+                            <TemplateIcon name="trash" size={14} style={{ marginRight: '4px' }} /> Hapus
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination controls for logs */}
+            {renderPagination(logPage, totalLogsPages, setLogPage)}
+          </>
+        )}
       </div>
 
       {/* Modal Tambah Pengeluaran */}

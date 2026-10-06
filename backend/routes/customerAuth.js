@@ -329,7 +329,7 @@ router.post('/verify-otp', function(req, res) {
           email: customer.email,
           role: 'customer' 
         },
-        process.env.JWT_SECRET,
+        (process.env.JWT_SECRET || 'supersecret_isp_dashboard_jwt_key_2026!'),
         { expiresIn: '30d' } // Customer stays logged in longer (30 days)
       );
 

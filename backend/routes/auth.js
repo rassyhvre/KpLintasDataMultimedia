@@ -168,7 +168,7 @@ router.post('/login', function(req, res) {
       var userRole = admin.role || 'admin';
       var token = jwt.sign(
         { id: admin.id_admin, email: admin.email, role: userRole },
-        process.env.JWT_SECRET,
+        (process.env.JWT_SECRET || 'supersecret_isp_dashboard_jwt_key_2026!'),
         { expiresIn: '24h' }
       );
 
