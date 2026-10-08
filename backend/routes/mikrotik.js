@@ -3,6 +3,7 @@ var router = express.Router();
 var MikrotikService = require('../services/mikrotik');
 var verifyToken = require('../middleware/auth');
 var Pelanggan = require('../models/Pelanggan');
+var db = require('../config/db');
 
 // Protect all mikrotik routes with JWT
 router.use(verifyToken);
@@ -20,10 +21,31 @@ router.get('/status', async function(req, res) {
 router.get('/secrets', async function(req, res) {
   try {
     var secrets = await MikrotikService.getSecrets();
-    res.json({
-      success: true,
-      data: secrets
-    });
+    db.query(
+      "SELECT pppoe_username FROM pelanggan WHERE pppoe_username IS NOT NULL AND pppoe_username <> '' AND pppoe_username NOT LIKE 'REG-%'",
+      function(err, customers) {
+        if (err) {
+          return res.status(500).json({
+            success: false,
+            message: 'Gagal memeriksa PPPoE yang sudah terdaftar.',
+            error: err.message
+          });
+        }
+
+        var registeredUsernames = new Set(customers.map(function(customer) {
+          return customer.pppoe_username;
+        }));
+        res.json({
+          success: true,
+          data: secrets.map(function(secret) {
+            return {
+              ...secret,
+              is_registered: registeredUsernames.has(secret.name)
+            };
+          })
+        });
+      }
+    );
   } catch (err) {
     res.status(500).json({
       success: false,
@@ -204,4 +226,3 @@ router.post('/kick-session', async function(req, res) {
 });
 
 module.exports = router;
-

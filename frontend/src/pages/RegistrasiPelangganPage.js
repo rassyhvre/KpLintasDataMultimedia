@@ -8,6 +8,9 @@ function RegistrasiPelangganPage({ socket }) {
   var [registrations, setRegistrations] = useState([]);
   var [loading, setLoading] = useState(true);
   var [reviewing, setReviewing] = useState(null);
+  var [rejectTarget, setRejectTarget] = useState(null);
+  var [alasanTolak, setAlasanTolak] = useState('');
+  var [pppoeSecrets, setPppoeSecrets] = useState([]);
   var [pppoeUsername, setPppoeUsername] = useState('');
   var [dueDate, setDueDate] = useState(new Date().toISOString().slice(0, 10));
   var [actionLoading, setActionLoading] = useState(false);
@@ -39,11 +42,17 @@ function RegistrasiPelangganPage({ socket }) {
     };
   }, [socket, fetchRegistrations]);
 
-  function openReview(registration) {
+  async function openReview(registration) {
     setReviewing(registration);
     setPppoeUsername('');
     setDueDate(new Date().toISOString().slice(0, 10));
     setError('');
+    try {
+      var response = await axios.get(API_BASE_URL + '/api/mikrotik/secrets', { headers: headers });
+      if (response.data.success) setPppoeSecrets(response.data.data || []);
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Gagal mengambil PPPoE secrets dari Mikrotik.');
+    }
   }
 
   async function handleApprove(event) {
@@ -67,16 +76,28 @@ function RegistrasiPelangganPage({ socket }) {
     }
   }
 
-  async function handleReject(registration) {
-    if (!window.confirm('Tolak pendaftaran ' + registration.nama + '? Data dan foto pendaftar akan dihapus.')) return;
+  function openReject(registration) {
+    setRejectTarget(registration);
+    setAlasanTolak('');
+    setError('');
+  }
+
+  async function handleReject(event) {
+    event.preventDefault();
+    if (!rejectTarget || !alasanTolak.trim()) {
+      setError('Silakan isi alasan penolakan terlebih dahulu.');
+      return;
+    }
     setActionLoading(true);
     setError('');
     try {
       var response = await axios.post(
-        API_BASE_URL + '/api/pelanggan/registrasi/' + registration.id_pelanggan + '/reject',
-        {},
+        API_BASE_URL + '/api/pelanggan/registrasi/' + rejectTarget.id_pelanggan + '/reject',
+        { alasan_tolak: alasanTolak },
         { headers: headers }
       );
+      setRejectTarget(null);
+      setAlasanTolak('');
       await fetchRegistrations();
       window.alert(response.data.message || 'Registrasi ditolak.');
     } catch (requestError) {
@@ -161,7 +182,7 @@ function RegistrasiPelangganPage({ socket }) {
                           <button className="btn btn-secondary btn-sm" onClick={function () { openReview(registration); }}>
                             Tinjau
                           </button>
-                          <button className="btn btn-danger btn-sm" onClick={function () { handleReject(registration); }} disabled={actionLoading}>
+                          <button className="btn btn-danger btn-sm" onClick={function () { openReject(registration); }} disabled={actionLoading}>
                             Tolak
                           </button>
                         </div>
@@ -174,6 +195,41 @@ function RegistrasiPelangganPage({ socket }) {
           </div>
         )}
       </div>
+
+      {rejectTarget && (
+        <Modal
+          isOpen={rejectTarget !== null}
+          onClose={function () { if (!actionLoading) { setRejectTarget(null); setAlasanTolak(''); } }}
+          title={<><TemplateIcon name="close" size={16} style={{ marginRight: '8px' }} /> Tolak Pendaftaran - {rejectTarget.nama}</>}
+          footer={(
+            <>
+              <button className="btn btn-secondary" onClick={function () { setRejectTarget(null); setAlasanTolak(''); }} disabled={actionLoading}>Batal</button>
+              <button className="btn btn-danger" onClick={handleReject} disabled={actionLoading || !alasanTolak.trim()}>
+                {actionLoading ? 'Mengirim...' : 'Tolak Pendaftaran'}
+              </button>
+            </>
+          )}
+        >
+          <form onSubmit={handleReject} style={{ padding: '10px 0' }}>
+            {error && <div className="login-error" role="alert" style={{ marginBottom: '16px' }}>{error}</div>}
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginBottom: '14px' }}>
+              Berikan alasan penolakan. Alasan ini akan dikirimkan melalui email kepada pelanggan.
+            </p>
+            <div className="form-group">
+              <label>Alasan Penolakan *</label>
+              <textarea
+                rows="4"
+                maxLength="2000"
+                placeholder="Tuliskan alasan pendaftaran belum dapat disetujui."
+                value={alasanTolak}
+                onChange={function (event) { setAlasanTolak(event.target.value); }}
+                required
+                autoFocus
+              />
+            </div>
+          </form>
+        </Modal>
+      )}
 
       <Modal
         isOpen={reviewing !== null}
@@ -203,7 +259,16 @@ function RegistrasiPelangganPage({ socket }) {
               </div>
               <div className="form-group">
                 <label htmlFor="registration-pppoe">PPPoE username *</label>
-                <input id="registration-pppoe" value={pppoeUsername} onChange={function (event) { setPppoeUsername(event.target.value); }} required maxLength="100" />
+                <select id="registration-pppoe" value={pppoeUsername} onChange={function (event) { setPppoeUsername(event.target.value); }} required>
+                  <option value="">-- Pilih PPPoE Secret --</option>
+                  {pppoeSecrets.map(function (secret) {
+                    return (
+                      <option key={secret.name} value={secret.name} disabled={secret.is_registered}>
+                        {secret.name} ({secret.profile || 'default'}){secret.is_registered ? ' - sudah terdaftar' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
               <div className="form-group">
                 <label htmlFor="registration-due-date">Jatuh tempo awal *</label>
