@@ -7,6 +7,7 @@ var PdfService = require('./pdfService');
 var SocketService = require('./socket');
 var MikrotikService = require('./mikrotik');
 var BillingService = require('./billingService');
+var logger = require('../utils/logger');
 
 // Helper to calculate difference in days between two dates
 function getDaysDifference(date1, date2) {
@@ -18,7 +19,17 @@ function getDaysDifference(date1, date2) {
 
 var CronService = {
   start: function() {
-    console.log('Daily Cron Job for billing status & Email reminder initialized.');
+    logger.box({
+      title: 'CRON JOB & AUTOMATION SERVICE',
+      subtitle: 'Evaluator Tagihan, Auto-Isolir & Reminder',
+      color: 'cyan',
+      items: [
+        { label: 'Status Service', value: 'Aktif & Siap', color: 'green' },
+        { label: 'Jadwal Otomatis', value: 'Setiap Hari Pukul 07:00 WIB' },
+        { label: 'Zona Waktu', value: 'Asia/Jakarta (WIB)' },
+        { label: 'Otomasi Fitur', value: 'Isolir PPPoE & Lampiran PDF Invoice' }
+      ]
+    });
     
     // Pastikan seluruh pelanggan aktif memiliki lembar tagihan berjalan di tabel tagihan
     BillingService.ensureActiveBills();
@@ -28,7 +39,7 @@ var CronService = {
     
     // Schedule to run every day at 07:00 AM
     cron.schedule('0 7 * * *', () => {
-      console.log('[Cron Job] Running daily check at 07:00 AM...');
+      logger.info('CRON', 'Menjalankan evaluasi harian tagihan (07:00 WIB)...');
       this.checkAndSendReminders();
     }, {
       scheduled: true,
@@ -37,17 +48,18 @@ var CronService = {
   },
 
   checkAndSendReminders: async function() {
-    console.log('[Cron Service] Starting billing status evaluation...');
     var today = new Date();
     
     // We fetch all active unpaid bills
     Tagihan.getUnpaid(async (err, unpaidBills) => {
       if (err) {
-        console.error('[Cron Service] Error fetching unpaid bills:', err.message);
+        logger.once('cron_db_err', 'warn', 'CRON', `Menunggu database siap: ${err.message}`);
         return;
       }
 
-      console.log(`[Cron Service] Evaluating ${unpaidBills.length} unpaid bill(s)`);
+      if (unpaidBills.length > 0) {
+        logger.info('CRON', `Mengevaluasi ${unpaidBills.length} tagihan aktif belum lunas...`);
+      }
 
       for (var i = 0; i < unpaidBills.length; i++) {
         var bill = unpaidBills[i];
@@ -71,10 +83,12 @@ var CronService = {
           // ISOLIR MIKROTIK OTOMATIS: Matikan secret PPPoE & putus sesi jika menunggak
           if (bill.pppoe_username) {
             try {
-              await MikrotikService.disableSecret(bill.pppoe_username);
-              console.log(`[Cron Service] Berhasil mengisolir koneksi MikroTik untuk pelanggan ${bill.nama} (${bill.pppoe_username})`);
+              var isolirResult = await MikrotikService.disableSecret(bill.pppoe_username);
+              if (isolirResult && isolirResult.success) {
+                logger.warn('CRON', `Berhasil isolir PPPoE '${isolirResult.secretName || bill.pppoe_username}' (${bill.nama}) - ${isolirResult.kickedCount || 0} sesi aktif diputus.`);
+              }
             } catch (mikrotikErr) {
-              console.error(`[Cron Service] Gagal mengisolir MikroTik untuk ${bill.pppoe_username}:`, mikrotikErr.message);
+              logger.error('CRON', `Gagal mengisolir MikroTik untuk ${bill.pppoe_username}: ${mikrotikErr.message}`);
             }
           }
         } else if (daysDiff >= 0 && daysDiff <= 3) {
@@ -97,9 +111,9 @@ var CronService = {
           
           Pelanggan.update(idPelanggan, updateData, function(updateErr) {
             if (updateErr) {
-              console.error(`[Cron Service] Failed to update customer ${idPelanggan} status:`, updateErr.message);
+              logger.error('CRON', `Gagal memperbarui status pelanggan #${idPelanggan}: ${updateErr.message}`);
             } else {
-              console.log(`[Cron Service] Updated customer ${idPelanggan} billing status to ${targetStatus}`);
+              logger.info('CRON', `Status pelanggan #${idPelanggan} (${bill.nama}) -> ${targetStatus}`);
               SocketService.broadcast('pelanggan_updated', {
                 id_pelanggan: idPelanggan,
                 status_tagihan: targetStatus,
@@ -116,7 +130,9 @@ var CronService = {
         }
       }
       
-      console.log('[Cron Service] Billing status evaluation completed.');
+      if (unpaidBills.length > 0) {
+        logger.info('CRON', `Evaluasi billing selesai (${unpaidBills.length} tagihan diperiksa).`);
+      }
     });
   },
 
@@ -210,9 +226,9 @@ var CronService = {
           tanggal_kirim: new Date()
         }, function(logErr) {
           if (logErr) {
-            console.error('[Cron Service] Failed to create reminder log:', logErr.message);
+            logger.error('CRON', `Gagal mencatat log reminder untuk ${name}: ${logErr.message}`);
           } else {
-            console.log(`[Cron Service] Reminder log created for ${name}`);
+            logger.success('CRON', `Reminder tagihan berhasil dikirim & dicatat untuk ${name}`);
           }
           resolve();
         });

@@ -4,6 +4,7 @@ var EmailService = require('./emailService');
 var PdfService = require('./pdfService');
 var SocketService = require('./socket');
 var Pelanggan = require('../models/Pelanggan');
+var logger = require('../utils/logger');
 
 /**
  * Menghitung tanggal jatuh tempo periode berikutnya dengan tanggal yang sama (sadar akhir bulan).
@@ -289,7 +290,7 @@ var BillingService = {
                 var mRes = await MikrotikService.enableSecret(bill.pppoe_username);
                 if (mRes) pppoeStatus = 'active';
               } catch (mErr) {
-                console.error('[BillingService] Gagal enable secret di MikroTik:', mErr.message);
+                logger.error('BILLING', `Gagal enable secret di MikroTik: ${mErr.message}`);
               }
             }
 
@@ -403,7 +404,7 @@ var BillingService = {
           var insertSql = 'INSERT INTO tagihan (id_pelanggan, periode, nominal, due_date, status) VALUES (?, ?, ?, ?, ?)';
           db.query(insertSql, [c.id_pelanggan, periode, nominal, dueStr, 'belum_bayar'], function (insErr, res) {
             if (!insErr && res) {
-              console.log(`[Billing Service] Auto-generated missing bill #${res.insertId} for customer ${c.nama} (${periode})`);
+              logger.info('BILLING', `Tagihan otomatis #${res.insertId} dibuat untuk ${c.nama} (${periode})`);
               SocketService.broadcast('tagihan_created', {
                 id_tagihan: res.insertId,
                 id_pelanggan: c.id_pelanggan,

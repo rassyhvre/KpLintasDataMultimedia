@@ -1,6 +1,7 @@
 var MikrotikService = require('./mikrotik');
 var Pelanggan = require('../models/Pelanggan');
 var SocketService = require('./socket');
+var logger = require('../utils/logger');
 
 var syncInterval = null;
 var isSyncing = false;
@@ -9,7 +10,7 @@ var SyncService = {
   start: function() {
     if (syncInterval) return;
 
-    console.log('Background Sync Service for Mikrotik PPPoE started.');
+    logger.info('SYNC', 'Background PPPoE Sync aktif (interval: 30s)');
     
     // Run sync immediately on startup, then every 30 seconds
     this.sync();
@@ -22,15 +23,12 @@ var SyncService = {
     if (syncInterval) {
       clearInterval(syncInterval);
       syncInterval = null;
-      console.log('Background Sync Service stopped.');
+      logger.info('SYNC', 'Background PPPoE Sync dihentikan.');
     }
   },
 
   sync: async function() {
-    if (isSyncing) {
-      console.log('[Sync Service] Sync is already in progress. Skipping.');
-      return;
-    }
+    if (isSyncing) return;
     isSyncing = true;
 
     try {
@@ -38,8 +36,50 @@ var SyncService = {
       var pingRes = await MikrotikService.ping();
       SocketService.broadcast('mikrotik_ping', pingRes);
       
+      // Catat log HANYA saat ada perubahan status router (mencegah spam 30s)
+      var statusKey = pingRes.online 
+        ? 'online' 
+        : ((pingRes.error && pingRes.error.includes('belum dikonfigurasi')) ? 'unconfigured' : 'offline');
+
+      logger.stateChange('mikrotik_status', statusKey, (current) => {
+        if (current === 'online') {
+          logger.box({
+            title: 'MIKROTIK ROUTER SERVICE',
+            subtitle: 'RouterOS API & PPPoE Telemetry',
+            color: 'cyan',
+            items: [
+              { label: 'Status Router', value: 'Terhubung (Online)', color: 'green' },
+              { label: 'Perangkat', value: `${pingRes.board || 'MikroTik'} (${pingRes.version || 'RouterOS'})` },
+              { label: 'Uptime', value: pingRes.uptime || '-' },
+              { label: 'Auto-Sync', value: 'PPPoE Real-Time Sync Aktif (30s)' }
+            ]
+          });
+        } else if (current === 'unconfigured') {
+          logger.box({
+            title: 'MIKROTIK ROUTER SERVICE',
+            subtitle: 'RouterOS API & PPPoE Telemetry',
+            color: 'yellow',
+            items: [
+              { label: 'Status Router', value: 'Belum Dikonfigurasi', color: 'yellow' },
+              { label: 'Auto-Sync', value: 'PPPoE Sync Dijeda (Standby)' },
+              { label: 'Petunjuk', value: 'Konfigurasi di Menu Pengaturan Admin' }
+            ]
+          });
+        } else {
+          logger.box({
+            title: 'MIKROTIK ROUTER SERVICE',
+            subtitle: 'RouterOS API & PPPoE Telemetry',
+            color: 'yellow',
+            items: [
+              { label: 'Status Router', value: 'Offline / Tidak Terjangkau', color: 'yellow' },
+              { label: 'Keterangan', value: pingRes.error || 'Connection Timeout' },
+              { label: 'Auto-Sync', value: 'Dijeda Sampai Router Terhubung' }
+            ]
+          });
+        }
+      });
+
       if (!pingRes.online) {
-        console.log('Mikrotik is offline. Skipping PPPoE status sync.');
         return;
       }
 
@@ -51,7 +91,7 @@ var SyncService = {
       await new Promise((resolve) => {
         Pelanggan.getAll(function(err, customers) {
           if (err) {
-            console.error('Error fetching customers for sync:', err.message);
+            logger.once('sync_cust_err', 'error', 'SYNC', `Gagal mengambil data pelanggan: ${err.message}`);
             resolve();
             return;
           }
@@ -71,9 +111,9 @@ var SyncService = {
               var updatePromise = new Promise((resolveUpdate) => {
                 Pelanggan.update(cust.id_pelanggan, { pppoe_status: newStatus }, function(updateErr) {
                   if (updateErr) {
-                    console.error(`Failed to update pppoe status for ${cust.nama}:`, updateErr.message);
+                    logger.error('SYNC', `Gagal update status PPPoE ${cust.nama}: ${updateErr.message}`);
                   } else {
-                    console.log(`Updated status of PPPoE user "${cust.pppoe_username}" (${cust.nama}) to ${newStatus}`);
+                    logger.info('SYNC', `Status PPPoE '${cust.pppoe_username}' (${cust.nama}) -> ${newStatus}`);
                     
                     // Broadcast change via Socket.IO
                     SocketService.broadcast('pelanggan_updated', {
@@ -95,9 +135,12 @@ var SyncService = {
               return !registeredPppoe.has(conn.name);
             });
 
-            if (unregistered.length > 0) {
-              console.log(`Detected ${unregistered.length} unregistered active PPPoE connection(s) on router.`);
-            }
+            // Log hanya jika terjadi perubahan jumlah unregistered connection
+            logger.stateChange('unregistered_pppoe_count', unregistered.length, (count) => {
+              if (count > 0) {
+                logger.warn('SYNC', `Terdeteksi ${count} koneksi PPPoE aktif router yang belum terdaftar di database.`);
+              }
+            });
 
             // Broadcast current active status summary to frontend
             SocketService.broadcast('pppoe_summary', {
@@ -112,7 +155,7 @@ var SyncService = {
       });
 
     } catch (err) {
-      console.error('Error in Sync Service execution:', err.message);
+      logger.once('sync_exec_err', 'error', 'SYNC', `Error pada eksekusi sync: ${err.message}`);
     } finally {
       isSyncing = false;
     }

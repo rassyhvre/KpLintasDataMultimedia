@@ -1,5 +1,6 @@
 var RouterOSAPI = require('node-routeros').RouterOSAPI;
 var ConfigService = require('./configService');
+var logger = require('../utils/logger');
 
 // Helper function to establish connection, write command, close connection, and return data
 async function executeCommand(command, params, customConfig) {
@@ -50,14 +51,9 @@ var MikrotikService = {
       }
       return { online: false, error: 'Respon router kosong' };
     } catch (err) {
-      if (err.message && err.message.includes('belum dikonfigurasi')) {
-        console.log('[Mikrotik] Kredensial Mikrotik belum dikonfigurasi.');
-      } else {
-        console.error('Mikrotik Connection Error detail:', err);
-      }
       return {
         online: false,
-        error: err.message
+        error: err.message || 'Koneksi gagal'
       };
     }
   },
@@ -239,91 +235,238 @@ var MikrotikService = {
     }
   },
 
+  // Find Secret case-insensitively
+  findSecret: async function(username) {
+    if (!username) return null;
+    var target = String(username).trim().toLowerCase();
+    try {
+      var secrets = await this.getSecrets();
+      return secrets.find(function(s) {
+        return (s.name || '').trim().toLowerCase() === target;
+      }) || null;
+    } catch (err) {
+      return null;
+    }
+  },
+
   // Check if secret exists
   validateSecret: async function(username) {
     try {
-      var secrets = await this.getSecrets();
-      return secrets.some(function(secret) {
-        return secret.name === username;
-      });
+      var secret = await this.findSecret(username);
+      return !!secret;
     } catch (err) {
       return false;
     }
   },
 
-  // Enable PPPoE Secret
-  enableSecret: async function(username) {
-    if (!username) return;
+  // Pastikan Profile ISOLIR dan Firewall Filter Drop Rule tersedia di MikroTik
+  ensureIsolirConfig: async function() {
     try {
-      console.log(`[Mikrotik] Enabling PPPoE secret: ${username}`);
-      // Find secret first to get its .id (required for set commands)
-      var secrets = await executeCommand('/ppp/secret/print', ['?name=' + username]);
-      if (secrets && secrets.length > 0) {
-        var secretId = secrets[0]['.id'];
+      // 1. Cek atau buat profile ISOLIR
+      var profiles = await executeCommand('/ppp/profile/print', ['?name=ISOLIR']);
+      if (!profiles || profiles.length === 0) {
+        await executeCommand('/ppp/profile/add', [
+          '=name=ISOLIR',
+          '=local-address=192.168.100.1',
+          '=remote-address=pppoe-pool',
+          '=address-list=ISOLIR',
+          '=dns-server=8.8.8.8',
+          '=comment=Profile Otomatis Isolir Pelanggan Menunggak'
+        ]);
+        logger.info('MIKROTIK', 'Profile PPP ISOLIR otomatis dibuat di router.');
+      }
+
+      // 2. Cek atau buat firewall filter rule drop
+      var filters = await executeCommand('/ip/firewall/filter/print', [
+        '?comment=ISOLIR: Blokir Internet Pelanggan Menunggak'
+      ]);
+      if (!filters || filters.length === 0) {
+        await executeCommand('/ip/firewall/filter/add', [
+          '=chain=forward',
+          '=src-address-list=ISOLIR',
+          '=action=drop',
+          '=comment=ISOLIR: Blokir Internet Pelanggan Menunggak'
+        ]);
+        logger.info('MIKROTIK', 'Firewall Filter drop rule ISOLIR otomatis dibuat di router.');
+      }
+    } catch (e) {
+      // Non-fatal
+    }
+  },
+
+  // Enable PPPoE Secret (Buka Isolir: Kembalikan ke Profile Default & Internet Normal TANPA Disconnect)
+  enableSecret: async function(username) {
+    if (!username) {
+      logger.warn('MIKROTIK', 'Perintah enableSecret dilewati: username kosong.');
+      return { success: false, reason: 'empty_username' };
+    }
+    try {
+      var secret = await this.findSecret(username);
+      if (secret) {
+        var secretId = secret['.id'];
+        var actualName = secret.name;
+
+        // 1. Kembalikan Profile ke 'default' dan pastikan disabled=no
         await executeCommand('/ppp/secret/set', [
           '=.id=' + secretId,
+          '=profile=default',
           '=disabled=no'
         ]);
-        console.log(`[Mikrotik] PPPoE secret ${username} enabled successfully.`);
-        return true;
+
+        // 2. Ambil IP sesi aktif user saat ini (jika sedang online)
+        var activeConns = await this.getActiveConnections();
+        var target = actualName.toLowerCase();
+        var currentActiveIps = [];
+        for (var k = 0; k < activeConns.length; k++) {
+          if ((activeConns[k].name || '').trim().toLowerCase() === target && activeConns[k].address) {
+            currentActiveIps.push(activeConns[k].address.trim());
+          }
+        }
+
+        // 3. Hapus IP dari firewall address-list ISOLIR
+        try {
+          var addrList = await executeCommand('/ip/firewall/address-list/print', [
+            '?list=ISOLIR'
+          ]);
+          if (Array.isArray(addrList)) {
+            for (var i = 0; i < addrList.length; i++) {
+              var item = addrList[i];
+              var itemComment = (item.comment || '').trim().toLowerCase();
+              var itemAddress = (item.address || '').trim();
+
+              if (itemComment === target || currentActiveIps.includes(itemAddress)) {
+                try {
+                  await executeCommand('/ip/firewall/address-list/remove', [
+                    '=.id=' + item['.id']
+                  ]);
+                } catch (remErr) {}
+              }
+            }
+          }
+        } catch (e) {}
+
+        // Catatan: TIDAK MEMUTUS SESI (disconnectSession) agar koneksi Dial-up di laptop
+        // tetap 100% "Connected" tanpa perlu klik manual reconnect.
+        logger.success('MIKROTIK', `PPPoE '${actualName}' isolir dibuka (Profile: default, internet seketika aktif tanpa disconnect).`);
+        return { success: true, secretName: actualName, isIsolated: false };
       }
-      console.warn(`[Mikrotik] Secret ${username} not found, cannot enable.`);
-      return false;
+      logger.warn('MIKROTIK', `Secret '${username}' tidak ditemukan di router.`);
+      return { success: false, reason: 'not_found' };
     } catch (err) {
-      console.error(`[Mikrotik] Failed to enable secret ${username}:`, err.message);
+      logger.error('MIKROTIK', `Gagal membuka isolir '${username}'`, err);
       throw err;
     }
   },
 
-  // Disable PPPoE Secret
+  // Disable PPPoE Secret (Isolir Cerdas: Blokir internet via Firewall TANPA Disconnect)
   disableSecret: async function(username) {
-    if (!username) return;
+    if (!username) {
+      logger.warn('MIKROTIK', 'Perintah disableSecret dilewati: username kosong.');
+      return { success: false, reason: 'empty_username' };
+    }
     try {
-      console.log(`[Mikrotik] Disabling PPPoE secret: ${username}`);
-      // Find secret first to get its .id
-      var secrets = await executeCommand('/ppp/secret/print', ['?name=' + username]);
-      if (secrets && secrets.length > 0) {
-        var secretId = secrets[0]['.id'];
+      await this.ensureIsolirConfig();
+
+      var secret = await this.findSecret(username);
+      if (secret) {
+        var secretId = secret['.id'];
+        var actualName = secret.name;
+
+        // 1. Ubah Profile ke 'ISOLIR' dan biarkan disabled=no
         await executeCommand('/ppp/secret/set', [
           '=.id=' + secretId,
-          '=disabled=yes'
+          '=profile=ISOLIR',
+          '=disabled=no'
         ]);
-        console.log(`[Mikrotik] PPPoE secret ${username} disabled successfully.`);
-        
-        // Also disconnect their active session immediately (kick them off)
-        await this.disconnectSession(username);
-        return true;
+
+        // 2. Tambahkan IP aktif ke address-list ISOLIR jika sedang online
+        var activeConns = await this.getActiveConnections();
+        var target = actualName.toLowerCase();
+        var matchingConns = activeConns.filter(function(conn) {
+          return (conn.name || '').trim().toLowerCase() === target;
+        });
+
+        for (var i = 0; i < matchingConns.length; i++) {
+          var ip = matchingConns[i].address;
+          if (ip) {
+            try {
+              await executeCommand('/ip/firewall/address-list/add', [
+                '=list=ISOLIR',
+                '=address=' + ip,
+                '=comment=' + actualName
+              ]);
+            } catch (e) {}
+          }
+        }
+
+        // Catatan: TIDAK MEMUTUS SESI (disconnectSession)! Sesi PPPoE di laptop tetap
+        // berstatus "Connected", namun internet langsung mati karena terblokir firewall ISOLIR.
+        logger.warn('MIKROTIK', `PPPoE '${actualName}' diisolir (Profile: ISOLIR, internet diblokir via Firewall, status Dial-up tetap Connected).`);
+        return { 
+          success: true, 
+          secretName: actualName, 
+          isIsolated: true 
+        };
       }
-      console.warn(`[Mikrotik] Secret ${username} not found, cannot disable.`);
-      return false;
+      logger.warn('MIKROTIK', `Secret '${username}' tidak ditemukan di router, isolir dilewati.`);
+      return { success: false, reason: 'not_found' };
     } catch (err) {
-      console.error(`[Mikrotik] Failed to disable secret ${username}:`, err.message);
+      logger.error('MIKROTIK', `Gagal mengisolir secret '${username}'`, err);
       throw err;
     }
   },
 
-  // Disconnect active PPPoE session
+  // Disconnect active PPPoE session (Hard Kick dengan verifikasi tuntas)
   disconnectSession: async function(username) {
-    if (!username) return;
+    if (!username) return { success: false, kickedCount: 0 };
+    var target = String(username).trim().toLowerCase();
+
     try {
-      console.log(`[Mikrotik] Checking for active session to disconnect: ${username}`);
-      // Find active connection ID
-      var activeConns = await executeCommand('/ppp/active/print', ['?name=' + username]);
-      if (activeConns && activeConns.length > 0) {
-        var connId = activeConns[0]['.id'];
+      // 1. Cari seluruh sesi aktif yang cocok (case-insensitive)
+      var activeConns = await this.getActiveConnections();
+      var matchingConns = activeConns.filter(function(conn) {
+        return (conn.name || '').trim().toLowerCase() === target;
+      });
+
+      if (matchingConns.length === 0) {
+        return { success: true, kickedCount: 0, message: 'Tidak ada sesi aktif berjalan.' };
+      }
+
+      // 2. Hapus seluruh sesi aktif
+      var removedCount = 0;
+      for (var i = 0; i < matchingConns.length; i++) {
+        var connId = matchingConns[i]['.id'];
         await executeCommand('/ppp/active/remove', [
           '=.id=' + connId
         ]);
-        console.log(`[Mikrotik] Kicked active session for user ${username}.`);
-        return true;
+        removedCount++;
       }
-      console.log(`[Mikrotik] No active session found for user ${username} to disconnect.`);
-      return false;
+
+      // 3. Verifikasi ulang setelah jeda 250ms untuk memastikan tidak ada ghost session
+      await new Promise(function(resolve) { setTimeout(resolve, 250); });
+
+      var verifyConns = await this.getActiveConnections();
+      var remaining = verifyConns.filter(function(conn) {
+        return (conn.name || '').trim().toLowerCase() === target;
+      });
+
+      if (remaining.length > 0) {
+        for (var j = 0; j < remaining.length; j++) {
+          await executeCommand('/ppp/active/remove', [
+            '=.id=' + remaining[j]['.id']
+          ]);
+          removedCount++;
+        }
+      }
+
+      logger.info('MIKROTIK', `Sesi aktif user '${username}' berhasil diputus paksa (${removedCount} sesi di-kick).`);
+      return { success: true, kickedCount: removedCount };
     } catch (err) {
-      console.error(`[Mikrotik] Failed to disconnect session for ${username}:`, err.message);
+      logger.error('MIKROTIK', `Gagal memutuskan sesi '${username}'`, err);
       throw err;
     }
-  }
+  },
+  executeCommand: executeCommand
 };
 
 module.exports = MikrotikService;

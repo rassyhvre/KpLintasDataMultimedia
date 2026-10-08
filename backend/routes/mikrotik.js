@@ -225,4 +225,56 @@ router.post('/kick-session', async function(req, res) {
   }
 });
 
+/* POST /api/mikrotik/isolir - Nonaktifkan secret PPPoE & putus sesi aktif */
+router.post('/isolir', async function(req, res) {
+  try {
+    var username = req.body.username;
+    if (!username) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username PPPoE harus disertakan'
+      });
+    }
+
+    var result = await MikrotikService.disableSecret(username);
+    res.json({
+      success: result.success,
+      message: result.success ? `PPPoE '${result.secretName || username}' berhasil diisolir.` : `Gagal: ${result.reason}`,
+      data: result
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: 'Gagal mengisolir PPPoE di MikroTik',
+      error: err.message
+    });
+  }
+});
+
+/* POST /api/mikrotik/buka-isolir - Aktifkan kembali secret PPPoE */
+router.post('/buka-isolir', async function(req, res) {
+  try {
+    var username = req.body.username;
+    if (!username) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username PPPoE harus disertakan'
+      });
+    }
+
+    var result = await MikrotikService.enableSecret(username);
+    res.json({
+      success: result.success,
+      message: result.success ? `PPPoE '${result.secretName || username}' berhasil diaktifkan kembali.` : `Gagal: ${result.reason}`,
+      data: result
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: 'Gagal mengaktifkan kembali PPPoE di MikroTik',
+      error: err.message
+    });
+  }
+});
+
 module.exports = router;

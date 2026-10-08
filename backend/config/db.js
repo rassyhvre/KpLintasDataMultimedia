@@ -1,4 +1,5 @@
 const mysql = require('mysql2');
+const logger = require('../utils/logger');
 
 const pool = mysql.createPool({
   connectionLimit: 10,
@@ -10,9 +11,28 @@ const pool = mysql.createPool({
 
 pool.getConnection((err, connection) => {
   if (err) {
-    console.error('Error menghubungkan ke database dashboard_isp:', err.message);
+    logger.box({
+      title: 'KONEKSI DATABASE MYSQL',
+      subtitle: 'Peringatan Koneksi Basis Data',
+      color: 'yellow',
+      items: [
+        { label: 'Database', value: process.env.DB_NAME || 'dashboard_isp' },
+        { label: 'Status', value: `Gagal Terhubung [${err.code || 'ETIMEDOUT'}]`, color: 'yellow' },
+        { label: 'Solusi', value: 'Pastikan service MySQL di XAMPP / Laragon aktif' }
+      ]
+    });
   } else {
-    console.log('Koneksi ke database dashboard_isp berhasil!');
+    logger.box({
+      title: 'KONEKSI DATABASE MYSQL',
+      subtitle: 'Status Koneksi & Database Pool',
+      color: 'cyan',
+      items: [
+        { label: 'Host & Port', value: `${process.env.DB_HOST || 'localhost'}:3306` },
+        { label: 'Nama Database', value: process.env.DB_NAME || 'dashboard_isp' },
+        { label: 'Status Koneksi', value: 'Terhubung (Connected)', color: 'green' },
+        { label: 'Struktur Tabel', value: 'Pengaturan, Rekening, & Tagihan Siap' }
+      ]
+    });
 
     // Pengecekan tabel pengaturan
     connection.query(`
@@ -47,7 +67,7 @@ pool.getConnection((err, connection) => {
             'INSERT INTO rekening_pembayaran (nama_bank, nomor_rekening, atas_nama, is_active) VALUES ?',
             [initialAccounts],
             (seedErr) => {
-              if (!seedErr) console.log('[DB Migration] Berhasil inisialisasi 3 rekening pembayaran default (BRI, Mandiri, BCA).');
+              if (!seedErr) logger.info('DATABASE', '[Migration] Inisialisasi 3 rekening pembayaran default (BRI, Mandiri, BCA).');
             }
           );
         }
@@ -58,7 +78,7 @@ pool.getConnection((err, connection) => {
     connection.query("SHOW COLUMNS FROM pembayaran LIKE 'hidden_customer'", (colErr, rows) => {
       if (!colErr && rows && rows.length === 0) {
         connection.query("ALTER TABLE pembayaran ADD COLUMN hidden_customer TINYINT(1) DEFAULT 0", (err) => {
-          if (!err) console.log('[DB Migration] Kolom hidden_customer berhasil ditambahkan pada tabel pembayaran.');
+          if (!err) logger.info('DATABASE', '[Migration] Kolom hidden_customer berhasil ditambahkan pada tabel pembayaran.');
         });
       }
     });
@@ -122,7 +142,7 @@ pool.getConnection((err, connection) => {
       connection.query("SHOW INDEX FROM laporan_bulanan WHERE Key_name = 'uq_laporan_periode'", (idxErr, idxRows) => {
         if (!idxErr && idxRows && idxRows.length > 0) {
           connection.query("ALTER TABLE laporan_bulanan DROP INDEX uq_laporan_periode", (dropErr) => {
-            if (!dropErr) console.log('[DB Migration] Index uq_laporan_periode berhasil dilepas agar riwayat unduhan dapat dicatat berulang.');
+            if (!dropErr) logger.info('DATABASE', '[Migration] Index uq_laporan_periode dilepas untuk riwayat laporan.');
           });
         }
       });

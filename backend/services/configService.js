@@ -1,4 +1,5 @@
 var db = require('../config/db');
+var logger = require('../utils/logger');
 
 var cache = {};
 var isInitialized = false;
@@ -18,13 +19,13 @@ var ConfigService = {
       `;
       db.query(createTableSql, function (err) {
         if (err) {
-          console.error('[ConfigService] Gagal membuat tabel pengaturan:', err.message);
+          logger.once('cfg_init_err', 'warn', 'CONFIG', `Menunggu koneksi database: ${err.message}`);
           return resolve(false);
         }
 
         db.query('SELECT id_pengaturan, nilai FROM pengaturan', function (selectErr, rows) {
           if (selectErr) {
-            console.error('[ConfigService] Gagal memuat data dari tabel pengaturan:', selectErr.message);
+            logger.once('cfg_load_err', 'warn', 'CONFIG', `Gagal memuat pengaturan: ${selectErr.message}`);
             return resolve(false);
           }
 
@@ -35,7 +36,17 @@ var ConfigService = {
           });
 
           isInitialized = true;
-          console.log(`[ConfigService] Terinisialisasi. ${rows.length} konfigurasi dimuat dari database.`);
+          logger.box({
+            title: 'PENGATURAN SISTEM (CONFIG SERVICE)',
+            subtitle: 'Konfigurasi Parameter Aplikasi & Gateway',
+            color: 'cyan',
+            items: [
+              { label: 'Sumber Data', value: 'MySQL (Tabel Pengaturan)' },
+              { label: 'Parameter Dimuat', value: `${rows.length} Pengaturan Aktif`, color: 'green' },
+              { label: 'Payment Gateway', value: cache['PAYMENT_GATEWAY_ACTIVE'] || 'Midtrans' },
+              { label: 'Status Cache', value: 'Memory Sync Terhubung Real-Time' }
+            ]
+          });
           resolve(true);
         });
       });

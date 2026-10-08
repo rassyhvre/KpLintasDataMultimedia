@@ -694,6 +694,39 @@ router.put('/:id', function(req, res, next) {
       fs.unlink(path.join(customerPhotoDir, path.basename(pelanggan.foto)), function() {});
     }
 
+    // Isolir / Re-enable PPPoE langsung ke router jika status pelanggan berubah
+    var effectiveUsername = updates.pppoe_username || pelanggan.pppoe_username;
+    var effectiveStatus = updates.status_tagihan || (updates.due_date ? targetCustomerStatus : pelanggan.status_tagihan);
+    if (effectiveUsername) {
+      var MikrotikService = require('../services/mikrotik');
+      var SocketService = require('../services/socket');
+      if (effectiveStatus === 'merah') {
+        try {
+          var isolirRes = await MikrotikService.disableSecret(effectiveUsername);
+          if (isolirRes && isolirRes.success) {
+            Pelanggan.update(id, { pppoe_status: 'inactive' }, function() {});
+            SocketService.broadcast('pelanggan_updated', {
+              id_pelanggan: id,
+              status_tagihan: 'merah',
+              pppoe_status: 'inactive'
+            });
+          }
+        } catch (mErr) {}
+      } else if (effectiveStatus === 'hijau') {
+        try {
+          var enableRes = await MikrotikService.enableSecret(effectiveUsername);
+          if (enableRes && enableRes.success) {
+            Pelanggan.update(id, { pppoe_status: 'active' }, function() {});
+            SocketService.broadcast('pelanggan_updated', {
+              id_pelanggan: id,
+              status_tagihan: 'hijau',
+              pppoe_status: 'active'
+            });
+          }
+        } catch (mErr) {}
+      }
+    }
+
     // Trigger billing check immediately in background to update status & send reminder if due
     var CronService = require('../services/cronService');
     CronService.checkAndSendReminders();
