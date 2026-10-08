@@ -147,7 +147,7 @@ router.post('/registrasi/:id/approve', async function(req, res) {
     await connectionAction('beginTransaction');
     transactionStarted = true;
 
-    var lockedRows = await queryConnection("SELECT p.id_pelanggan, p.paket FROM pelanggan p WHERE p.id_pelanggan = ? AND p.pppoe_username LIKE 'REG-%' FOR UPDATE", [id]);
+    var lockedRows = await queryConnection("SELECT p.id_pelanggan, p.nama, p.email, p.paket FROM pelanggan p WHERE p.id_pelanggan = ? AND p.pppoe_username LIKE 'REG-%' FOR UPDATE", [id]);
     if (lockedRows.length === 0) {
       await connectionAction('rollback');
       transactionStarted = false;
@@ -172,10 +172,33 @@ router.post('/registrasi/:id/approve', async function(req, res) {
     await connectionAction('commit');
     transactionStarted = false;
 
+    var emailResult = { success: false };
+    if (customer.email) {
+      try {
+        var EmailService = require('../services/emailService');
+        emailResult = await EmailService.sendRegistrationApprovedEmail(customer.email, {
+          nama: customer.nama,
+          pppoe_username: pppoeUsername,
+          paket: customer.paket,
+          due_date: dueDate
+        });
+      } catch (emailError) {
+        emailResult.error = emailError.message;
+      }
+    }
+    if (!emailResult.success) {
+      console.error('[Pelanggan] Gagal mengirim email persetujuan registrasi:', emailResult.error || 'Email pelanggan tidak tersedia.');
+    }
+
     var SocketService = require('../services/socket');
     SocketService.broadcast('registrasi_updated', { id_pelanggan: id });
     SocketService.broadcast('pelanggan_updated', { id_pelanggan: id });
-    res.json({ success: true, message: 'Registrasi disetujui dan tagihan awal berhasil dibuat.' });
+    res.json({
+      success: true,
+      message: emailResult.success
+        ? 'Registrasi disetujui, tagihan awal berhasil dibuat, dan notifikasi email telah dikirim.'
+        : 'Registrasi disetujui dan tagihan awal berhasil dibuat, tetapi notifikasi email gagal dikirim.'
+    });
   } catch (err) {
     if (transactionStarted) {
       try { await connectionAction('rollback'); } catch (rollbackError) { console.error('[Pelanggan] Gagal rollback persetujuan registrasi:', rollbackError.message); }
@@ -190,20 +213,44 @@ router.post('/registrasi/:id/approve', async function(req, res) {
 /* POST /api/pelanggan/registrasi/:id/reject - Tolak dan hapus data registrasi */
 router.post('/registrasi/:id/reject', function(req, res) {
   var id = Number(req.params.id);
+  var alasanTolak = (req.body.alasan_tolak || '').trim();
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ success: false, message: 'ID pelanggan tidak valid.' });
-  db.query("SELECT foto FROM pelanggan WHERE id_pelanggan = ? AND pppoe_username LIKE 'REG-%' LIMIT 1", [id], function(err, rows) {
+  if (!alasanTolak || alasanTolak.length > 2000) return res.status(400).json({ success: false, message: 'Alasan penolakan wajib diisi (maksimal 2000 karakter).' });
+  db.query("SELECT nama, email, foto FROM pelanggan WHERE id_pelanggan = ? AND pppoe_username LIKE 'REG-%' LIMIT 1", [id], function(err, rows) {
     if (err) return res.status(500).json({ success: false, message: 'Gagal memeriksa registrasi pelanggan.' });
     if (!rows.length) return res.status(404).json({ success: false, message: 'Registrasi tidak ditemukan atau sudah diproses.' });
-    db.query("DELETE FROM pelanggan WHERE id_pelanggan = ? AND pppoe_username LIKE 'REG-%'", [id], function(deleteError, result) {
+    db.query("DELETE FROM pelanggan WHERE id_pelanggan = ? AND pppoe_username LIKE 'REG-%'", [id], async function(deleteError, result) {
       if (deleteError) return res.status(500).json({ success: false, message: 'Gagal menolak registrasi pelanggan.' });
       if (!result.affectedRows) return res.status(409).json({ success: false, message: 'Registrasi sudah diproses admin lain.' });
       var foto = rows[0].foto || '';
       if (foto.startsWith('/uploads/foto-pelanggan/')) {
         fs.unlink(path.join(customerPhotoDir, path.basename(foto)), function() {});
       }
+      var emailResult = { success: false };
+      if (rows[0].email) {
+        try {
+          var EmailService = require('../services/emailService');
+          emailResult = await EmailService.sendRegistrationRejectedEmail(rows[0].email, {
+            nama: rows[0].nama,
+            alasan_tolak: alasanTolak
+          });
+        } catch (emailError) {
+          emailResult.error = emailError.message;
+        }
+        if (!emailResult.success) {
+          console.error('[Pelanggan] Gagal mengirim email penolakan registrasi:', emailResult.error);
+        }
+      } else {
+        console.error('[Pelanggan] Email tidak tersedia untuk notifikasi penolakan registrasi.');
+      }
       var SocketService = require('../services/socket');
       SocketService.broadcast('registrasi_updated', { id_pelanggan: id });
-      res.json({ success: true, message: 'Registrasi ditolak dan data pendaftar dihapus.' });
+      res.json({
+        success: true,
+        message: emailResult.success
+          ? 'Registrasi ditolak, data pendaftar dihapus, dan notifikasi email telah dikirim.'
+          : 'Registrasi ditolak dan data pendaftar dihapus, tetapi notifikasi email gagal dikirim.'
+      });
     });
   });
 });

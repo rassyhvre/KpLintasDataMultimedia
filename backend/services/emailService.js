@@ -6,6 +6,18 @@ var ConfigService = require('./configService');
 // Publicly hosted logo URL on raw GitHub to ensure it renders instantly and reliably in Gmail
 var LOGO_URL = 'https://raw.githubusercontent.com/rassyhvre/KpLintasDataMultimedia/main/backend/public/logo_ldm.png';
 
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>"']/g, function(character) {
+    return {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[character];
+  });
+}
+
 /**
  * Creates a Nodemailer transporter instance dynamically using ConfigService or custom options
  */
@@ -317,6 +329,61 @@ var EmailService = {
 
   <p>Terima kasih,<br>
   <strong>PT Lintas Data Multimedia</strong></p>
+</body>
+</html>
+    `;
+    return await this.sendEmail(toEmail, subject, html);
+  },
+
+  sendRegistrationApprovedEmail: async function (toEmail, data) {
+    var nama = escapeHtml(data.nama);
+    var pppoeUsername = escapeHtml(data.pppoe_username);
+    var paket = escapeHtml(data.paket);
+    var dueDate = escapeHtml(data.due_date);
+    var subject = 'Pendaftaran Internet Disetujui - ' + data.nama;
+    var html = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #222222; margin: 0; padding: 20px; }
+  </style>
+</head>
+<body>
+  <p>Halo <strong>${nama}</strong>,</p>
+  <p>Kabar baik! Pendaftaran layanan internet Anda telah disetujui.</p>
+  <p>PPPoE username: <strong>${pppoeUsername}</strong><br>
+  Paket layanan: <strong>${paket}</strong><br>
+  Jatuh tempo awal: <strong>${dueDate}</strong></p>
+  <p>Tagihan awal telah dibuat. Silakan masuk ke portal pelanggan untuk melihat informasi tagihan dan layanan Anda.</p>
+  <p>Jika ada pertanyaan, silakan hubungi kami melalui email <a href="mailto:helpdesk@ldm.net.id">helpdesk@ldm.net.id</a>.</p>
+  <p>Terima kasih,<br><strong>PT Lintas Data Multimedia</strong></p>
+</body>
+</html>
+    `;
+    return await this.sendEmail(toEmail, subject, html);
+  },
+
+  sendRegistrationRejectedEmail: async function (toEmail, data) {
+    var nama = escapeHtml(data.nama);
+    var alasanTolak = escapeHtml(data.alasan_tolak).replace(/\r?\n/g, '<br>');
+    var subject = 'Informasi Pendaftaran Internet - ' + data.nama;
+    var html = `
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #222222; margin: 0; padding: 20px; }
+  </style>
+</head>
+<body>
+  <p>Halo <strong>${nama}</strong>,</p>
+  <p>Mohon maaf, pendaftaran layanan internet Anda belum dapat disetujui.</p>
+  <p><strong>Alasan penolakan:</strong><br>${alasanTolak}</p>
+  <p>Jika ada pertanyaan atau ingin mengajukan kembali, silakan hubungi kami melalui email <a href="mailto:helpdesk@ldm.net.id">helpdesk@ldm.net.id</a>.</p>
+  <p>Terima kasih,<br><strong>PT Lintas Data Multimedia</strong></p>
 </body>
 </html>
     `;

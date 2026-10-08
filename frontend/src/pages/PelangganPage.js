@@ -654,8 +654,8 @@ function PelangganPage({ socket }) {
                 <option value="">-- Pilih PPPoE Secret --</option>
                 {pppoeSecrets.map(function (secret) {
                   return (
-                    <option key={secret.name} value={secret.name}>
-                      {secret.name} ({secret.profile || 'default'})
+                    <option key={secret.name} value={secret.name} disabled={secret.is_registered}>
+                      {secret.name} ({secret.profile || 'default'}){secret.is_registered ? ' - sudah terdaftar' : ''}
                     </option>
                   );
                 })}
