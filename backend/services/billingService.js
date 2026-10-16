@@ -382,7 +382,7 @@ var BillingService = {
       SELECT p.id_pelanggan, p.nama, p.due_date, p.paket, pl.harga 
       FROM pelanggan p 
       LEFT JOIN paket_layanan pl ON p.paket = pl.nama_paket
-      WHERE p.due_date IS NOT NULL
+      WHERE p.due_date IS NOT NULL AND p.pppoe_username IS NOT NULL AND p.pppoe_username != '' AND p.pppoe_username NOT LIKE 'REG-%'
     `;
     db.query(sql, function (err, customers) {
       if (err || !customers) return;

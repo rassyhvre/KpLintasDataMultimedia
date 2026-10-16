@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 import Modal from '../components/Modal';
 import TemplateIcon from '../components/TemplateIcon';
@@ -16,6 +17,7 @@ function PelangganTanpaPppoePage({ socket }) {
   var [assignDueDate, setAssignDueDate] = useState('');
   var [assignLoading, setAssignLoading] = useState(false);
   var [assignError, setAssignError] = useState('');
+  var [successNotification, setSuccessNotification] = useState('');
 
   // Modal Edit Data Pelanggan
   var [editTarget, setEditTarget] = useState(null);
@@ -127,6 +129,7 @@ function PelangganTanpaPppoePage({ socket }) {
       var response = await axios.put(`${API_BASE_URL}/api/pelanggan/` + assignTarget.id_pelanggan, payload, { headers: headers });
       if (response.data.success) {
         setAssignTarget(null);
+        setSuccessNotification(response.data.message || 'Akun PPPoE berhasil dihubungkan dan notifikasi email aktivasi telah dikirimkan ke pelanggan!');
         fetchData();
         fetchPppoeSecrets();
       }
@@ -282,6 +285,19 @@ function PelangganTanpaPppoePage({ socket }) {
           <button className="btn btn-secondary" onClick={function () { fetchData(); fetchPppoeSecrets(); }}>
             <TemplateIcon name="loading" size={14} style={{ marginRight: '6px' }} /> Refresh
           </button>
+          <Link
+            to="/dashboard/pelanggan?action=tambah"
+            className="btn btn-primary"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontWeight: 600,
+              textDecoration: 'none'
+            }}
+          >
+            <TemplateIcon name="plus" size={16} /> Tambah Pelanggan
+          </Link>
         </div>
       </div>
 
@@ -302,6 +318,51 @@ function PelangganTanpaPppoePage({ socket }) {
           <span className="material-symbols-outlined" style={{ fontSize: '1.4rem', color: '#fa8c16' }}>info</span>
           <div>
             <strong>Panduan:</strong> Pelanggan pada daftar ini belum memiliki akun PPPoE di router. Klik tombol <strong>Hubungkan</strong> untuk memilih PPPoE secret dari router Mikrotik agar koneksi WiFi dan pemantauan status tagihan dapat aktif.
+          </div>
+        </div>
+      )}
+
+      {/* Alert Sukses Hubungkan PPPoE */}
+      {successNotification && (
+        <div style={{
+          background: '#f6ffed',
+          border: '1px solid #b7eb8f',
+          borderRadius: '8px',
+          padding: '12px 18px',
+          marginBottom: '20px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#135200', fontSize: '0.9rem' }}>
+            <span className="material-symbols-outlined" style={{ color: '#52c41a' }}>mark_email_read</span>
+            <span>{successNotification}</span>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <Link
+              to="/dashboard/pelanggan"
+              className="btn btn-sm"
+              style={{
+                background: '#135200',
+                color: '#ffffff',
+                border: 'none',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              Buka Data Pelanggan <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_forward</span>
+            </Link>
+            <button
+              type="button"
+              onClick={function () { setSuccessNotification(''); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#135200', padding: '4px', display: 'flex', alignItems: 'center' }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>close</span>
+            </button>
           </div>
         </div>
       )}

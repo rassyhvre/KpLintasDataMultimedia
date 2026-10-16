@@ -426,6 +426,32 @@ router.post('/', function(req, res, next) {
     var CronService = require('../services/cronService');
     CronService.checkAndSendReminders();
 
+    try {
+      var SocketService = require('../services/socket');
+      SocketService.broadcast('pelanggan_updated', { id_pelanggan: result.id_pelanggan });
+    } catch (sErr) {}
+
+    // Notifikasi email aktivasi PPPoE jika dibuat langsung dengan PPPoE
+    if (trimmedPppoe && !trimmedPppoe.startsWith('REG-') && email) {
+      try {
+        var EmailService = require('../services/emailService');
+        var ConfigService = require('../services/configService');
+        var appUrl = ConfigService.get('APP_URL', process.env.APP_URL) || 'http://localhost:3001';
+        var loginUrl = appUrl.replace(/\/$/, '') + '/login';
+
+        await EmailService.sendPppoeActivatedEmail(email.trim(), {
+          nama: nama,
+          email: email.trim(),
+          pppoe_username: trimmedPppoe,
+          paket: paket || '-',
+          due_date: due_date || '-',
+          loginUrl: loginUrl
+        });
+      } catch (emailErr) {
+        console.error('[Pelanggan] Gagal mengirim email aktivasi PPPoE:', emailErr.message);
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: 'Pelanggan berhasil ditambahkan!',
@@ -464,6 +490,8 @@ router.put('/:id', function(req, res, next) {
       removeUploadedPhoto();
       return res.status(404).json({ success: false, message: 'Pelanggan tidak ditemukan.' });
     }
+
+    var wasWithoutPppoe = !pelanggan.pppoe_username || pelanggan.pppoe_username.trim() === '' || pelanggan.pppoe_username.startsWith('REG-');
 
     var updates = { ...req.body };
     if (updates.nik !== undefined) {
@@ -755,9 +783,46 @@ router.put('/:id', function(req, res, next) {
     var CronService = require('../services/cronService');
     CronService.checkAndSendReminders();
 
+    try {
+      var SocketService = require('../services/socket');
+      SocketService.broadcast('pelanggan_updated', { id_pelanggan: id });
+    } catch (sErr) {}
+
+    // Cek apakah PPPoE baru saja dihubungkan ke pelanggan
+    var newPppoe = (updates.pppoe_username || '').trim();
+    var isNewlyConnectedPppoe = wasWithoutPppoe && Boolean(newPppoe && !newPppoe.startsWith('REG-'));
+
+    if (isNewlyConnectedPppoe) {
+      var targetEmail = (updates.email || pelanggan.email || '').trim();
+      if (targetEmail) {
+        try {
+          var EmailService = require('../services/emailService');
+          var ConfigService = require('../services/configService');
+          var appUrl = ConfigService.get('APP_URL', process.env.APP_URL) || 'http://localhost:3001';
+          var loginUrl = appUrl.replace(/\/$/, '') + '/login';
+
+          await EmailService.sendPppoeActivatedEmail(targetEmail, {
+            nama: updates.nama || pelanggan.nama,
+            email: targetEmail,
+            pppoe_username: newPppoe,
+            paket: updates.paket || pelanggan.paket || '-',
+            due_date: updates.due_date || (pelanggan.due_date ? String(pelanggan.due_date).split('T')[0] : '-'),
+            loginUrl: loginUrl
+          });
+        } catch (emailErr) {
+          console.error('[Pelanggan] Gagal mengirim email aktivasi PPPoE:', emailErr.message);
+        }
+      }
+    }
+
+    var successMsg = isNewlyConnectedPppoe
+      ? 'Akun PPPoE berhasil dihubungkan dan notifikasi email aktivasi telah dikirimkan ke pelanggan!'
+      : 'Data pelanggan berhasil diupdate!';
+
     res.json({
       success: true,
-      message: 'Data pelanggan berhasil diupdate!'
+      message: successMsg,
+      isNewlyConnectedPppoe: isNewlyConnectedPppoe
     });
 
   } catch (err) {

@@ -29,6 +29,7 @@ function PelangganPage({ socket }) {
     due_date: ''
   });
   var [formError, setFormError] = useState('');
+  var [successNotification, setSuccessNotification] = useState('');
   var [showCustomerPassword, setShowCustomerPassword] = useState(false);
   var [searchQuery, setSearchQuery] = useState('');
   var [customerPage, setCustomerPage] = useState(1);
@@ -174,6 +175,7 @@ function PelangganPage({ socket }) {
         Object.keys(formData).forEach(function (key) { payload.append(key, formData[key]); });
         payload.append('foto_ktp', fotoKtp);
         await axios.post(`${API_BASE_URL}/api/pelanggan`, payload, { headers: headers });
+        setSuccessNotification('Pelanggan berhasil ditambahkan! Data otomatis masuk ke menu "Belum Ada PPPoE" untuk dihubungkan dengan akun PPPoE Mikrotik.');
       }
       setShowModal(false);
       setFotoKtp(null);
@@ -358,10 +360,11 @@ function PelangganPage({ socket }) {
         </button>
       </div>
 
-      {pelanggan.filter(function (p) { return !p.pppoe_username; }).length > 0 && (
+      {/* Alert Notifikasi Sukses Tambah Pelanggan ke Antrean Belum PPPoE */}
+      {successNotification && (
         <div style={{
-          background: '#fff9e6',
-          border: '1px solid #ffe58f',
+          background: '#f6ffed',
+          border: '1px solid #b7eb8f',
           borderRadius: '8px',
           padding: '12px 18px',
           marginBottom: '20px',
@@ -371,27 +374,34 @@ function PelangganPage({ socket }) {
           gap: '12px',
           flexWrap: 'wrap'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#873800', fontSize: '0.9rem' }}>
-            <span className="material-symbols-outlined" style={{ color: '#fa8c16' }}>link_off</span>
-            <span>
-              Terdapat <strong>{pelanggan.filter(function (p) { return !p.pppoe_username; }).length} pelanggan</strong> yang belum terdaftar PPPoE Secret-nya di Mikrotik.
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#135200', fontSize: '0.9rem' }}>
+            <span className="material-symbols-outlined" style={{ color: '#52c41a' }}>check_circle</span>
+            <span>{successNotification}</span>
           </div>
-          <Link
-            to="/dashboard/pelanggan-tanpa-pppoe"
-            className="btn btn-sm"
-            style={{
-              background: '#fa8c16',
-              color: '#ffffff',
-              border: 'none',
-              fontWeight: 600,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            Kelola di Halaman Khusus <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_forward</span>
-          </Link>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <Link
+              to="/dashboard/pelanggan-tanpa-pppoe"
+              className="btn btn-sm"
+              style={{
+                background: '#135200',
+                color: '#ffffff',
+                border: 'none',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              Buka Belum Ada PPPoE <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_forward</span>
+            </Link>
+            <button
+              type="button"
+              onClick={function () { setSuccessNotification(''); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#135200', padding: '4px', display: 'flex', alignItems: 'center' }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>close</span>
+            </button>
+          </div>
         </div>
       )}
 

@@ -335,34 +335,173 @@ var EmailService = {
     return await this.sendEmail(toEmail, subject, html);
   },
 
-  sendRegistrationApprovedEmail: async function (toEmail, data) {
+  /**
+   * Send PPPoE / WiFi activation notification email
+   */
+  sendPppoeActivatedEmail: async function (toEmail, data) {
     var nama = escapeHtml(data.nama);
     var pppoeUsername = escapeHtml(data.pppoe_username);
-    var paket = escapeHtml(data.paket);
-    var dueDate = escapeHtml(data.due_date);
-    var subject = 'Pendaftaran Internet Disetujui - ' + data.nama;
+    var paket = escapeHtml(data.paket || '-');
+    var dueDate = escapeHtml(data.due_date || '-');
+    var loginUrl = data.loginUrl || 'http://localhost:3001/login';
+    var registeredEmail = escapeHtml(toEmail);
+
+    var namaIsp = ConfigService.get('NAMA_ISP', 'PT. Lintas Data Multimedia');
+    var telpCs = ConfigService.get('TELP_CS', '+62 851-8200-1676');
+    var emailCs = ConfigService.get('EMAIL_CS', 'helpdesk@ldm.net.id');
+    var logoUrl = LOGO_URL;
+
+    var subject = `🎉 Akun & WiFi Telah Aktif - ${data.nama} | ${namaIsp}`;
+
     var html = `
 <!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.6; color: #222222; margin: 0; padding: 20px; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Akun & Layanan WiFi Telah Diaktifkan</title>
 </head>
-<body>
-  <p>Halo <strong>${nama}</strong>,</p>
-  <p>Kabar baik! Pendaftaran layanan internet Anda telah disetujui.</p>
-  <p>PPPoE username: <strong>${pppoeUsername}</strong><br>
-  Paket layanan: <strong>${paket}</strong><br>
-  Jatuh tempo awal: <strong>${dueDate}</strong></p>
-  <p>Tagihan awal telah dibuat. Silakan masuk ke portal pelanggan untuk melihat informasi tagihan dan layanan Anda.</p>
-  <p>Jika ada pertanyaan, silakan hubungi kami melalui email <a href="mailto:helpdesk@ldm.net.id">helpdesk@ldm.net.id</a>.</p>
-  <p>Terima kasih,<br><strong>PT Lintas Data Multimedia</strong></p>
+<body style="margin: 0; padding: 0; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b; -webkit-font-smoothing: antialiased;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f1f5f9; padding: 36px 16px;">
+    <tr>
+      <td align="center">
+        
+        <!-- Main Card Container -->
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width: 560px; width: 100%; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 16px rgba(0,0,0,0.04); overflow: hidden;">
+          <!-- Header with Logo -->
+          <tr>
+            <td style="padding: 28px 36px 20px; border-bottom: 1px solid #f1f5f9;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="left">
+                    <img src="${logoUrl}" alt="${namaIsp}" width="140" style="display: block; height: auto; max-width: 140px; border: 0;">
+                  </td>
+                  <td align="right">
+                    <span style="display: inline-block; padding: 5px 12px; background-color: #ecfdf5; color: #047857; font-size: 12px; font-weight: 700; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px;">
+                      ● Layanan Aktif
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Body Content -->
+          <tr>
+            <td style="padding: 32px 36px;">
+              <h1 style="margin: 0 0 12px; font-size: 20px; font-weight: 700; color: #0f172a; line-height: 28px;">
+                🎉 Akun & Koneksi WiFi Anda Sudah Aktif!
+              </h1>
+              
+              <p style="margin: 0 0 16px; font-size: 14.5px; color: #475569; line-height: 24px;">
+                Halo <strong>${nama}</strong>,
+              </p>
+
+              <p style="margin: 0 0 24px; font-size: 14.5px; color: #475569; line-height: 24px;">
+                Kabar gembira! Akun PPPoE dan koneksi WiFi Anda telah berhasil dihubungkan dan diaktifkan oleh admin operasional kami. Sekarang Anda sudah dapat menikmati layanan internet berkecepatan tinggi dari <strong>${namaIsp}</strong>.
+              </p>
+
+              <!-- Service Details Box -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 24px; overflow: hidden;">
+                <tr>
+                  <td style="padding: 14px 20px; background-color: #f1f5f9; border-bottom: 1px solid #e2e8f0;">
+                    <strong style="font-size: 13px; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">Informasi Layanan Internet</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 14px 20px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="padding: 5px 0; font-size: 13.5px; color: #64748b; width: 42%;">Nama Pelanggan</td>
+                        <td style="padding: 5px 0; font-size: 13.5px; font-weight: 600; color: #0f172a;">${nama}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 5px 0; font-size: 13.5px; color: #64748b;">Paket Layanan</td>
+                        <td style="padding: 5px 0; font-size: 13.5px; font-weight: 600; color: #0f172a;">${paket}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 5px 0; font-size: 13.5px; color: #64748b;">PPPoE Username</td>
+                        <td style="padding: 5px 0; font-size: 13.5px; font-family: monospace; font-weight: 700; color: #006190;">${pppoeUsername}</td>
+                      </tr>
+                      ${dueDate !== '-' ? `
+                      <tr>
+                        <td style="padding: 5px 0; font-size: 13.5px; color: #64748b;">Jatuh Tempo</td>
+                        <td style="padding: 5px 0; font-size: 13.5px; font-weight: 600; color: #0f172a;">${dueDate}</td>
+                      </tr>` : ''}
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Login Web Information Box -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; margin-bottom: 24px; padding: 18px 20px;">
+                <tr>
+                  <td>
+                    <h3 style="margin: 0 0 8px; font-size: 15px; font-weight: 700; color: #166534;">
+                      🔑 Akses Portal Pelanggan
+                    </h3>
+                    <p style="margin: 0 0 12px; font-size: 13.5px; color: #15803d; line-height: 22px;">
+                      Untuk memantau tagihan, mengunggah bukti pembayaran, dan melihat status layanan internet Anda, silakan login ke web portal pelanggan:
+                    </p>
+                    <div style="background-color: #ffffff; border: 1px solid #bbf7d0; border-radius: 6px; padding: 12px 14px; margin-bottom: 14px;">
+                      <div style="font-size: 12px; color: #6b7280; margin-bottom: 2px;">Email Login:</div>
+                      <div style="font-size: 14.5px; font-weight: 700; color: #111827; font-family: monospace;">${registeredEmail}</div>
+                      <div style="font-size: 12px; color: #059669; margin-top: 4px;">✓ Gunakan email yang telah didaftarkan oleh admin operasional</div>
+                    </div>
+                    <div style="text-align: center; margin: 16px 0 6px;">
+                      <a href="${loginUrl}" target="_blank" style="display: inline-block; padding: 11px 26px; background-color: #006190; color: #ffffff !important; font-size: 14px; font-weight: 700; text-decoration: none; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,97,144,0.25);">
+                        Masuk ke Portal Pelanggan &rarr;
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Security Notice / Ubah Password Warning -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; border-radius: 6px; margin-bottom: 24px; padding: 16px 18px;">
+                <tr>
+                  <td>
+                    <strong style="display: block; font-size: 14px; color: #92400e; margin-bottom: 6px;">
+                      ⚠️ PENTING: Segera Ubah Password Anda
+                    </strong>
+                    <p style="margin: 0; font-size: 13px; color: #b45309; line-height: 20px;">
+                      Saat pertama kali login, gunakan password yang telah dibuatkan oleh admin operasional. <strong>Demi menjaga privasi dan keamanan akun Anda, jangan lupa untuk segera mengubah password default tersebut</strong> melalui menu profil setelah Anda berhasil masuk ke portal pelanggan.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Support Note -->
+              <p style="margin: 0; font-size: 13px; color: #64748b; line-height: 20px;">
+                Bila Anda membutuhkan bantuan atau informasi lebih lanjut, silakan hubungi customer service kami melalui WhatsApp <strong>${telpCs}</strong> atau email <a href="mailto:${emailCs}" style="color: #006190; text-decoration: underline;">${emailCs}</a>.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 22px 36px; background-color: #f8fafc; border-top: 1px solid #f1f5f9; text-align: center;">
+              <p style="margin: 0 0 4px; font-size: 12.5px; font-weight: 600; color: #475569;">
+                ${namaIsp}
+              </p>
+              <p style="margin: 0; font-size: 11.5px; color: #94a3b8;">
+                Email ini dikirim otomatis oleh sistem notifikasi ${namaIsp}.
+              </p>
+            </td>
+          </tr>
+        </table>
+
+      </td>
+    </tr>
+  </table>
 </body>
 </html>
     `;
     return await this.sendEmail(toEmail, subject, html);
+  },
+
+  sendRegistrationApprovedEmail: async function (toEmail, data) {
+    return await this.sendPppoeActivatedEmail(toEmail, data);
   },
 
   sendRegistrationRejectedEmail: async function (toEmail, data) {

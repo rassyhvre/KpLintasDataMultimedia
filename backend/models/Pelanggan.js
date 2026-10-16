@@ -15,7 +15,7 @@ var Pelanggan = {
         ) AS due_date
       FROM pelanggan p 
       LEFT JOIN paket_layanan pl ON p.paket = pl.nama_paket 
-      WHERE (p.pppoe_username IS NULL OR p.pppoe_username NOT LIKE 'REG-%')
+      WHERE p.pppoe_username IS NOT NULL AND p.pppoe_username != '' AND p.pppoe_username NOT LIKE 'REG-%'
       ORDER BY p.created_at DESC
     `;
     db.query(sql, function(err, results) {
@@ -150,7 +150,7 @@ var Pelanggan = {
 
   // Hitung jumlah pelanggan per status
   countByStatus: function(callback) {
-    var sql = "SELECT status_tagihan, COUNT(*) as total FROM pelanggan WHERE (pppoe_username IS NULL OR pppoe_username NOT LIKE 'REG-%') GROUP BY status_tagihan";
+    var sql = "SELECT status_tagihan, COUNT(*) as total FROM pelanggan WHERE pppoe_username IS NOT NULL AND pppoe_username != '' AND pppoe_username NOT LIKE 'REG-%' GROUP BY status_tagihan";
     db.query(sql, function(err, results) {
       if (err) return callback(err, null);
       callback(null, results);
@@ -159,7 +159,7 @@ var Pelanggan = {
 
   // Hitung total pelanggan
   countActive: function(callback) {
-    var sql = "SELECT COUNT(*) as total FROM pelanggan WHERE (pppoe_username IS NULL OR pppoe_username NOT LIKE 'REG-%')";
+    var sql = "SELECT COUNT(*) as total FROM pelanggan WHERE pppoe_username IS NOT NULL AND pppoe_username != '' AND pppoe_username NOT LIKE 'REG-%'";
     db.query(sql, function(err, results) {
       if (err) return callback(err, null);
       callback(null, results[0].total);
