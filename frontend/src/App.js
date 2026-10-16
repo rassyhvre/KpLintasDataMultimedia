@@ -27,6 +27,7 @@ import TagihanPage from './pages/TagihanPage';
 import ProfilPage from './pages/ProfilPage';
 import KelolaAdminPage from './pages/KelolaAdminPage';
 import RegistrasiPelangganPage from './pages/RegistrasiPelangganPage';
+import PelangganTanpaPppoePage from './pages/PelangganTanpaPppoePage';
 
 function App() {
   var location = useLocation();
@@ -203,6 +204,7 @@ function App() {
               <Route path="/dashboard" element={<DashboardPage socket={socket} admin={admin} />} />
               <Route path="/dashboard/registrasi" element={<RegistrasiPelangganPage socket={socket} />} />
               <Route path="/dashboard/pelanggan" element={<PelangganPage socket={socket} />} />
+              <Route path="/dashboard/pelanggan-tanpa-pppoe" element={<PelangganTanpaPppoePage socket={socket} />} />
               <Route path="/dashboard/tagihan" element={<TagihanPage socket={socket} admin={admin} />} />
               <Route path="/dashboard/paket" element={<PaketPage />} />
               <Route path="/dashboard/mikrotik" element={<MikrotikPage socket={socket} />} />

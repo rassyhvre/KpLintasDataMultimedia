@@ -123,6 +123,9 @@ pool.getConnection((err, connection) => {
       }
     });
 
+    // Pastikan pppoe_username dan due_date di pelanggan dapat bernilai NULL
+    connection.query("ALTER TABLE pelanggan MODIFY pppoe_username VARCHAR(100) NULL DEFAULT NULL, MODIFY due_date DATE NULL DEFAULT NULL", () => {});
+
     // Pengecekan struktur tabel laporan_bulanan untuk riwayat unduhan
     connection.query(`
       CREATE TABLE IF NOT EXISTS laporan_bulanan (

@@ -15,7 +15,7 @@ var Pelanggan = {
         ) AS due_date
       FROM pelanggan p 
       LEFT JOIN paket_layanan pl ON p.paket = pl.nama_paket 
-      WHERE p.pppoe_username NOT LIKE 'REG-%'
+      WHERE (p.pppoe_username IS NULL OR p.pppoe_username NOT LIKE 'REG-%')
       ORDER BY p.created_at DESC
     `;
     db.query(sql, function(err, results) {
@@ -57,8 +57,8 @@ var Pelanggan = {
       data.nama,
       data.alamat || '',
       data.no_hp,
-      data.pppoe_username || '',
-      data.paket || '',
+      data.pppoe_username ? data.pppoe_username.trim() : null,
+      data.paket || null,
       data.due_date || null,
       data.email || null,
       data.password,
@@ -79,10 +79,13 @@ var Pelanggan = {
     if (data.nama !== undefined) { fields.push('nama = ?'); values.push(data.nama); }
     if (data.alamat !== undefined) { fields.push('alamat = ?'); values.push(data.alamat); }
     if (data.no_hp !== undefined) { fields.push('no_hp = ?'); values.push(data.no_hp); }
-    if (data.pppoe_username !== undefined) { fields.push('pppoe_username = ?'); values.push(data.pppoe_username); }
-    if (data.paket !== undefined) { fields.push('paket = ?'); values.push(data.paket); }
+    if (data.pppoe_username !== undefined) {
+      fields.push('pppoe_username = ?');
+      values.push(data.pppoe_username ? data.pppoe_username.trim() : null);
+    }
+    if (data.paket !== undefined) { fields.push('paket = ?'); values.push(data.paket || null); }
     if (data.status_tagihan !== undefined) { fields.push('status_tagihan = ?'); values.push(data.status_tagihan); }
-    if (data.due_date !== undefined) { fields.push('due_date = ?'); values.push(data.due_date); }
+    if (data.due_date !== undefined) { fields.push('due_date = ?'); values.push(data.due_date || null); }
     if (data.pppoe_status !== undefined) { fields.push('pppoe_status = ?'); values.push(data.pppoe_status); }
     if (data.email !== undefined) { fields.push('email = ?'); values.push(data.email); }
     if (data.nik !== undefined) { fields.push('nik = ?'); values.push(data.nik); }
@@ -147,7 +150,7 @@ var Pelanggan = {
 
   // Hitung jumlah pelanggan per status
   countByStatus: function(callback) {
-    var sql = "SELECT status_tagihan, COUNT(*) as total FROM pelanggan WHERE pppoe_username NOT LIKE 'REG-%' GROUP BY status_tagihan";
+    var sql = "SELECT status_tagihan, COUNT(*) as total FROM pelanggan WHERE (pppoe_username IS NULL OR pppoe_username NOT LIKE 'REG-%') GROUP BY status_tagihan";
     db.query(sql, function(err, results) {
       if (err) return callback(err, null);
       callback(null, results);
@@ -156,7 +159,7 @@ var Pelanggan = {
 
   // Hitung total pelanggan
   countActive: function(callback) {
-    var sql = "SELECT COUNT(*) as total FROM pelanggan WHERE pppoe_username NOT LIKE 'REG-%'";
+    var sql = "SELECT COUNT(*) as total FROM pelanggan WHERE (pppoe_username IS NULL OR pppoe_username NOT LIKE 'REG-%')";
     db.query(sql, function(err, results) {
       if (err) return callback(err, null);
       callback(null, results[0].total);

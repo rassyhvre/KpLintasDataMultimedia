@@ -88,6 +88,31 @@ router.get('/registrasi/pending', function(req, res) {
   });
 });
 
+/* GET /api/pelanggan/tanpa-pppoe - Pelanggan yang belum terdaftar/dikonfigurasi PPPoE-nya */
+router.get('/tanpa-pppoe', function(req, res) {
+  var sql = `
+    SELECT 
+      p.*, 
+      pl.harga, 
+      pl.kecepatan,
+      COALESCE(
+        (SELECT due_date FROM tagihan WHERE id_pelanggan = p.id_pelanggan AND status != 'lunas' ORDER BY due_date ASC LIMIT 1),
+        (SELECT due_date FROM tagihan WHERE id_pelanggan = p.id_pelanggan ORDER BY due_date DESC LIMIT 1),
+        p.due_date
+      ) AS due_date
+    FROM pelanggan p 
+    LEFT JOIN paket_layanan pl ON p.paket = pl.nama_paket 
+    WHERE (p.pppoe_username IS NULL OR p.pppoe_username = '')
+    ORDER BY p.created_at DESC
+  `;
+  db.query(sql, function(err, results) {
+    if (err) {
+      return res.status(500).json({ success: false, message: 'Gagal mengambil data pelanggan tanpa PPPoE', error: err.message });
+    }
+    res.json({ success: true, data: results });
+  });
+});
+
 /* POST /api/pelanggan/registrasi/:id/approve - Setujui registrasi dan buat tagihan awal */
 router.post('/registrasi/:id/approve', async function(req, res) {
   var id = Number(req.params.id);
@@ -331,9 +356,10 @@ router.post('/', function(req, res, next) {
     }
 
     // 3. Cek duplikat pppoe_username (jika diisi)
-    if (pppoe_username) {
+    var trimmedPppoe = pppoe_username ? pppoe_username.trim() : '';
+    if (trimmedPppoe) {
       var existingPppoe = await new Promise((resolve, reject) => {
-        Pelanggan.findByPppoe(pppoe_username, (err, result) => err ? reject(err) : resolve(result));
+        Pelanggan.findByPppoe(trimmedPppoe, (err, result) => err ? reject(err) : resolve(result));
       });
       if (existingPppoe) {
         removeUploadedPhoto();
@@ -343,10 +369,10 @@ router.post('/', function(req, res, next) {
       // 4. Validasi PPPoE Username di Mikrotik Router
       var pingRes = await MikrotikService.ping();
       if (pingRes.online) {
-        var isValid = await MikrotikService.validateSecret(pppoe_username);
+        var isValid = await MikrotikService.validateSecret(trimmedPppoe);
         if (!isValid) {
           removeUploadedPhoto();
-          return res.status(400).json({ success: false, message: `PPPoE Username "${pppoe_username}" tidak ditemukan di router Mikrotik.` });
+          return res.status(400).json({ success: false, message: `PPPoE Username "${trimmedPppoe}" tidak ditemukan di router Mikrotik.` });
         }
       } else {
         console.warn('Mikrotik offline during onboarding validation. Skipping check.');
@@ -365,16 +391,15 @@ router.post('/', function(req, res, next) {
         password: passwordHash,
         nik: nik,
         foto: '/uploads/foto-pelanggan/' + req.file.filename,
-        pppoe_username: pppoe_username || '',
-        paket: paket,
-        due_date: due_date
+        pppoe_username: trimmedPppoe || null,
+        paket: paket || null,
+        due_date: due_date || null
       }, (err, resObj) => err ? reject(err) : resolve(resObj));
     });
     customerCreated = true;
 
     // 6. Buat tagihan awal otomatis jika due_date dan paket diset
     if (due_date && paket) {
-      var db = require('../config/db');
       var nominal = await new Promise((resolve) => {
         db.query('SELECT harga FROM paket_layanan WHERE nama_paket = ?', [paket], (err, rows) => {
           resolve(rows && rows[0] ? rows[0].harga : 0);
@@ -409,7 +434,8 @@ router.post('/', function(req, res, next) {
 
   } catch (err) {
     if (!customerCreated) removeUploadedPhoto();
-    return res.status(500).json({ success: false, message: 'Server error', error: err.message });
+    console.error('Error saat tambah pelanggan:', err);
+    return res.status(500).json({ success: false, message: err.message || 'Server error', error: err.message });
   }
 });
 
@@ -487,8 +513,8 @@ router.put('/:id', function(req, res, next) {
 
     // 4. Validate pppoe_username change
     if (updates.pppoe_username !== undefined && updates.pppoe_username !== pelanggan.pppoe_username) {
-      var pppoeVal = updates.pppoe_username || '';
-      updates.pppoe_username = pppoeVal;
+      var pppoeVal = (updates.pppoe_username || '').trim();
+      updates.pppoe_username = pppoeVal ? pppoeVal : null;
 
       if (pppoeVal) {
         // Uniqueness check
@@ -513,8 +539,6 @@ router.put('/:id', function(req, res, next) {
         }
       }
     }
-
-    var db = require('../config/db');
 
     // If due_date was updated:
     if (updates.due_date) {

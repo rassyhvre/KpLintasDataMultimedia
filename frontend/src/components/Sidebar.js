@@ -10,6 +10,8 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
   var [profileOpen, setProfileOpen] = useState(false);
   var [pendingCount, setPendingCount] = useState(0);
   var [pendingRegistrationCount, setPendingRegistrationCount] = useState(0);
+  var [unconfiguredPppoeCount, setUnconfiguredPppoeCount] = useState(0);
+  var [pelangganOpen, setPelangganOpen] = useState(false);
   var [pembayaranOpen, setPembayaranOpen] = useState(false);
 
   function getInitials(nama) {
@@ -37,6 +39,13 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
         if (res.data.success) setPendingRegistrationCount(res.data.data.length);
       })
       .catch(function (err) { console.error('Sidebar error pending registration:', err); });
+
+    // Fetch customers without PPPoE count
+    axios.get(API_BASE_URL + '/api/pelanggan/tanpa-pppoe', { headers: headers })
+      .then(function (res) {
+        if (res.data.success) setUnconfiguredPppoeCount(res.data.data.length);
+      })
+      .catch(function (err) { console.error('Sidebar error tanpa pppoe:', err); });
   };
 
   useEffect(function () {
@@ -72,7 +81,16 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
       items: [
         { path: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
         { path: '/dashboard/registrasi', label: 'Pendaftaran', icon: 'person_add', badge: pendingRegistrationCount },
-        { path: '/dashboard/pelanggan', label: 'Pelanggan', icon: 'group' },
+        {
+          path: '/dashboard/pelanggan',
+          label: 'Pelanggan',
+          icon: 'group',
+          badge: unconfiguredPppoeCount,
+          subItems: [
+            { path: '/dashboard/pelanggan', label: 'Data Pelanggan' },
+            { path: '/dashboard/pelanggan-tanpa-pppoe', label: 'Belum Ada PPPoE', badge: unconfiguredPppoeCount }
+          ]
+        },
         { path: '/dashboard/tagihan', label: 'Tagihan', icon: 'receipt_long' },
         {
           path: '/dashboard/pembayaran', label: 'Pembayaran', icon: 'payments',
@@ -281,11 +299,23 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
                 </div>
               )}
               {section.items.map(function (item, iIdx) {
-                var isCleanActive = location.pathname === item.path.split('?')[0];
-                var isActive = isCleanActive || (item.path.includes('action') && location.pathname + location.search === item.path);
-
                 var hasSubItems = item.subItems && item.subItems.length > 0;
-                var isExpanded = hasSubItems && (pembayaranOpen || location.pathname.startsWith('/dashboard/pembayaran'));
+                var isCleanActive = location.pathname === item.path.split('?')[0];
+                var isParentActive = isCleanActive || (hasSubItems && item.subItems.some(function (sub) {
+                  return location.pathname === sub.path.split('?')[0];
+                }));
+                var isActive = isParentActive || (item.path.includes('action') && location.pathname + location.search === item.path);
+
+                var isExpanded = false;
+                if (hasSubItems) {
+                  if (item.label === 'Pelanggan') {
+                    isExpanded = pelangganOpen || location.pathname.startsWith('/dashboard/pelanggan');
+                  } else if (item.label === 'Pembayaran') {
+                    isExpanded = pembayaranOpen || location.pathname.startsWith('/dashboard/pembayaran');
+                  } else {
+                    isExpanded = location.pathname.startsWith(item.path.split('?')[0]);
+                  }
+                }
 
                 // Render collapsible menu if subItems exist
                 if (hasSubItems) {
@@ -296,10 +326,14 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
                         onClick={function (e) {
                           if (!collapsed) {
                             e.preventDefault();
-                            setPembayaranOpen(!pembayaranOpen);
+                            if (item.label === 'Pelanggan') {
+                              setPelangganOpen(!pelangganOpen);
+                            } else if (item.label === 'Pembayaran') {
+                              setPembayaranOpen(!pembayaranOpen);
+                            }
                           }
                         }}
-                        className={'sidebar-link' + (isCleanActive ? ' active' : '')}
+                        className={'sidebar-link' + (isParentActive ? ' active' : '')}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -307,9 +341,9 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
                           justifyContent: collapsed ? 'center' : 'flex-start',
                           padding: '10px 12px',
                           borderRadius: '8px',
-                          color: isCleanActive ? 'var(--primary)' : 'var(--text-secondary)',
-                          background: isCleanActive ? 'var(--primary-glow)' : 'transparent',
-                          fontWeight: isCleanActive ? '700' : '600',
+                          color: isParentActive ? 'var(--primary)' : 'var(--text-secondary)',
+                          background: isParentActive ? 'var(--primary-glow)' : 'transparent',
+                          fontWeight: isParentActive ? '700' : '600',
                           textDecoration: 'none',
                           marginBottom: '4px',
                           fontSize: '0.88rem',
@@ -317,13 +351,13 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
                           position: 'relative'
                         }}
                         onMouseEnter={function (e) {
-                          if (!isCleanActive) {
+                          if (!isParentActive) {
                             e.currentTarget.style.background = 'var(--bg-secondary)';
                             e.currentTarget.style.color = 'var(--text-primary)';
                           }
                         }}
                         onMouseLeave={function (e) {
-                          if (!isCleanActive) {
+                          if (!isParentActive) {
                             e.currentTarget.style.background = 'transparent';
                             e.currentTarget.style.color = 'var(--text-secondary)';
                           }
@@ -385,7 +419,8 @@ function Sidebar({ admin, onLogout, socket, collapsed }) {
                           marginLeft: '20px'
                         }}>
                           {item.subItems.map(function (subItem, sIdx) {
-                            var isSubActive = location.pathname + location.search === subItem.path ||
+                            var isSubActive = (location.pathname + location.search === subItem.path) ||
+                              (location.pathname === subItem.path.split('?')[0] && !subItem.path.includes('?')) ||
                               (subItem.path === '/dashboard/pembayaran?type=manual' && (location.pathname + location.search === '/dashboard/pembayaran' || location.pathname + location.search === '/dashboard/pembayaran?type=manual'));
 
                             return (

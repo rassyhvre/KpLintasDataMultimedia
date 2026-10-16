@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
@@ -179,7 +180,7 @@ function PelangganPage({ socket }) {
       setFotoKtpExisting('');
       fetchPelanggan();
     } catch (err) {
-      var message = err.response?.data?.message || 'Terjadi kesalahan.';
+      var message = err.response?.data?.message || err.response?.data?.error || 'Terjadi kesalahan.';
       setFormError(message);
     }
   }
@@ -356,6 +357,43 @@ function PelangganPage({ socket }) {
           <TemplateIcon name="plus" size={16} style={{ marginRight: '6px' }} /> Tambah Pelanggan
         </button>
       </div>
+
+      {pelanggan.filter(function (p) { return !p.pppoe_username; }).length > 0 && (
+        <div style={{
+          background: '#fff9e6',
+          border: '1px solid #ffe58f',
+          borderRadius: '8px',
+          padding: '12px 18px',
+          marginBottom: '20px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#873800', fontSize: '0.9rem' }}>
+            <span className="material-symbols-outlined" style={{ color: '#fa8c16' }}>link_off</span>
+            <span>
+              Terdapat <strong>{pelanggan.filter(function (p) { return !p.pppoe_username; }).length} pelanggan</strong> yang belum terdaftar PPPoE Secret-nya di Mikrotik.
+            </span>
+          </div>
+          <Link
+            to="/dashboard/pelanggan-tanpa-pppoe"
+            className="btn btn-sm"
+            style={{
+              background: '#fa8c16',
+              color: '#ffffff',
+              border: 'none',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            Kelola di Halaman Khusus <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>arrow_forward</span>
+          </Link>
+        </div>
+      )}
 
       <div className="table-container animate-fadeIn">
         <div className="table-header">
@@ -647,29 +685,37 @@ function PelangganPage({ socket }) {
               />
             </div>
           </div>
-          <div className="form-group">
-            <label>PPPoE Username (Mikrotik)</label>
-            {pppoeSecrets.length > 0 ? (
-              <select name="pppoe_username" value={formData.pppoe_username} onChange={handleChange}>
-                <option value="">-- Pilih PPPoE Secret --</option>
-                {pppoeSecrets.map(function (secret) {
-                  return (
-                    <option key={secret.name} value={secret.name} disabled={secret.is_registered}>
-                      {secret.name} ({secret.profile || 'default'}){secret.is_registered ? ' - sudah terdaftar' : ''}
-                    </option>
-                  );
-                })}
-              </select>
-            ) : (
-              <input
-                type="text"
-                name="pppoe_username"
-                placeholder="Username PPPoE di router"
-                value={formData.pppoe_username}
-                onChange={handleChange}
-              />
-            )}
-          </div>
+          {editMode && (
+            <div className="form-group">
+              <label>PPPoE Username (Mikrotik)</label>
+              {pppoeSecrets.length > 0 ? (
+                <select name="pppoe_username" value={formData.pppoe_username} onChange={handleChange}>
+                  <option value="">-- Pilih PPPoE Secret --</option>
+                  {pppoeSecrets.map(function (secret) {
+                    var isCurrentSecret = secret.name === formData.pppoe_username;
+                    return (
+                      <option
+                        key={secret.name}
+                        value={secret.name}
+                        disabled={secret.is_registered && !isCurrentSecret}
+                      >
+                        {secret.name} ({secret.profile || 'default'})
+                        {secret.is_registered && !isCurrentSecret ? ' - sudah terdaftar' : (isCurrentSecret ? ' (saat ini)' : '')}
+                      </option>
+                    );
+                  })}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  name="pppoe_username"
+                  placeholder="Username PPPoE di router"
+                  value={formData.pppoe_username}
+                  onChange={handleChange}
+                />
+              )}
+            </div>
+          )}
         </form>
       </Modal>
 
