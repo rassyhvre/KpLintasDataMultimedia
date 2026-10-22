@@ -285,18 +285,13 @@ function PelangganTanpaPppoePage({ socket }) {
           <button className="btn btn-secondary" onClick={function () { fetchData(); fetchPppoeSecrets(); }}>
             <TemplateIcon name="loading" size={14} style={{ marginRight: '6px' }} /> Refresh
           </button>
-          <Link
-            to="/dashboard/pelanggan?action=tambah"
-            className="btn btn-primary"
+          <Link to="/dashboard/pelanggan?action=tambah" className="btn btn-primary"
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontWeight: 600,
-              textDecoration: 'none'
-            }}
-          >
-            <TemplateIcon name="plus" size={16} /> Tambah Pelanggan
+              background: 'var(--md-primary-fixed)',
+              color: 'var(--md-on-primary-fixed-variant)',
+              fontWeight: '700'
+            }}>
+            <TemplateIcon name="plus" size={16} style={{ marginRight: '6px' }} /> Tambah Pelanggan
           </Link>
         </div>
       </div>

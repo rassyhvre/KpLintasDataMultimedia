@@ -351,11 +351,12 @@ function PelangganPage({ socket }) {
           <h1>Data Pelanggan</h1>
           <p>Kelola seluruh data pelanggan ISP ESP Lintas Data.</p>
         </div>
-        <button id="btn-tambah-pelanggan" className="btn btn-primary" onClick={openAddModal} style={{
-          background: 'var(--md-primary-fixed)',
-          color: 'var(--md-on-primary-fixed-variant)',
-          fontWeight: '700'
-        }}>
+        <button id="btn-tambah-pelanggan" className="btn btn-primary" onClick={openAddModal}
+          style={{
+            background: 'var(--md-primary-fixed)',
+            color: 'var(--md-on-primary-fixed-variant)',
+            fontWeight: '700'
+          }}>
           <TemplateIcon name="plus" size={16} style={{ marginRight: '6px' }} /> Tambah Pelanggan
         </button>
       </div>
@@ -560,7 +561,7 @@ function PelangganPage({ socket }) {
             <TemplateIcon name="alert" size={16} style={{ marginRight: '6px' }} /> {formError}
           </div>
         )}
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="off">
           <div className="form-group">
             <label>Nama Pelanggan *</label>
             <input
@@ -591,6 +592,7 @@ function PelangganPage({ socket }) {
               placeholder="email@example.com"
               value={formData.email}
               onChange={handleChange}
+              autoComplete="off"
             />
           </div>
           {!editMode && (
@@ -603,6 +605,7 @@ function PelangganPage({ socket }) {
                   placeholder="Masukkan password login pelanggan"
                   value={formData.password}
                   onChange={handleChange}
+                  autoComplete="new-password"
                   minLength={6}
                   required
                   style={{ width: '100%', paddingRight: '40px' }}
