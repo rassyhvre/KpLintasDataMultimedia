@@ -98,11 +98,20 @@ router.get('/details', function (req, res) {
   });
 });
 
-/* GET /api/reports/export-excel - EXPORT 12 SHEET BULANAN (SHEET 1 JANUARI S/D SHEET 12 DESEMBER) */
+/* GET /api/reports/export-excel - Export a monthly or yearly Excel report */
 router.get('/export-excel', function (req, res) {
-  var { periode, year } = req.query;
+  var { periode, year, scope } = req.query;
   var selectedYear;
-  if (year) {
+  var selectedMonth = null;
+
+  if (scope === 'month') {
+    var monthMatch = typeof periode === 'string' && periode.match(/^(\d{4})-(0[1-9]|1[0-2])$/);
+    if (!monthMatch) {
+      return res.status(400).send('Periode bulan harus menggunakan format YYYY-MM.');
+    }
+    selectedYear = monthMatch[1];
+    selectedMonth = parseInt(monthMatch[2], 10);
+  } else if (year) {
     selectedYear = year.toString();
   } else if (periode) {
     selectedYear = periode.split('-')[0];
@@ -131,7 +140,11 @@ router.get('/export-excel', function (req, res) {
       a.nama as nama_admin,
       DATE_FORMAT(p.tanggal, '%m') as bulan_pengeluaran
     FROM pengeluaran p 
-    LEFT JOIN admin a ON p.id_admin = a.id_admin 
+    LEFT JOIN (
+      SELECT id_admin, MAX(nama) as nama
+      FROM admin
+      GROUP BY id_admin
+    ) a ON p.id_admin = a.id_admin
     WHERE DATE_FORMAT(p.tanggal, '%Y') = ?
     ORDER BY p.tanggal DESC, p.created_at DESC
   `;
@@ -197,9 +210,10 @@ router.get('/export-excel', function (req, res) {
           }
         });
 
-        // Generate Sheet 1 (Januari) s/d Sheet 12 (Desember)
-        monthNames.forEach(function (monthName, idx) {
-          var monthNum = idx + 1;
+        // Monthly exports contain only the selected period; yearly exports keep all 12 sheets.
+        var monthsToExport = selectedMonth ? [selectedMonth] : monthNames.map(function (_, idx) { return idx + 1; });
+        monthsToExport.forEach(function (monthNum) {
+          var monthName = monthNames[monthNum - 1];
           var sheetName = monthNum + '. ' + monthName;
           var sheet = workbook.addWorksheet(sheetName, {
             views: [{ showGridLines: true }]
@@ -243,7 +257,9 @@ router.get('/export-excel', function (req, res) {
 
           sheet.mergeCells('B4:J4');
           var infoCell = sheet.getCell('B4');
-          infoCell.value = 'Sheet ' + monthNum + ' dari 12 | Periode Transaksi: 01 ' + monthName + ' ' + selectedYear + ' s/d akhir bulan';
+          infoCell.value = selectedMonth
+            ? 'Periode Transaksi: 01 ' + monthName + ' ' + selectedYear + ' s/d akhir bulan'
+            : 'Sheet ' + monthNum + ' dari 12 | Periode Transaksi: 01 ' + monthName + ' ' + selectedYear + ' s/d akhir bulan';
           infoCell.font = { name: 'Calibri', size: 9, color: { argb: 'FF7F7F7F' } };
           infoCell.alignment = { vertical: 'middle', horizontal: 'left' };
 
@@ -489,7 +505,9 @@ router.get('/export-excel', function (req, res) {
         });
 
         // Set response headers
-        var downloadFilename = 'Laporan_Keuangan_Tahunan_' + selectedYear + '_(Januari-Desember).xlsx';
+        var downloadFilename = selectedMonth
+          ? 'Laporan_Keuangan_' + monthNames[selectedMonth - 1] + '_' + selectedYear + '.xlsx'
+          : 'Laporan_Keuangan_Tahunan_' + selectedYear + '_(Januari-Desember).xlsx';
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', 'attachment; filename="' + downloadFilename + '"');
 
@@ -535,7 +553,7 @@ router.get('/export-excel', function (req, res) {
         }
 
       } catch (error) {
-        console.error('Error saat membuat 12 sheet Excel:', error);
+        console.error('Error saat membuat laporan Excel:', error);
         res.status(500).send('Gagal mengekspor laporan: ' + error.message);
       }
     });

@@ -10,7 +10,11 @@ var LaporanBulanan = {
     var sql = `
       SELECT l.*, a.nama as nama_admin, a.email as email_admin 
       FROM laporan_bulanan l 
-      LEFT JOIN admin a ON l.id_admin = a.id_admin 
+      LEFT JOIN (
+        SELECT id_admin, MAX(nama) as nama, MAX(email) as email
+        FROM admin
+        GROUP BY id_admin
+      ) a ON l.id_admin = a.id_admin
       ORDER BY l.generated_at DESC 
       LIMIT ?
     `;

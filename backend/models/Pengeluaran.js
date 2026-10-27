@@ -6,7 +6,11 @@ var Pengeluaran = {
     var sql = `
       SELECT p.*, a.nama as nama_admin 
       FROM pengeluaran p 
-      LEFT JOIN admin a ON p.id_admin = a.id_admin 
+      LEFT JOIN (
+        SELECT id_admin, MAX(nama) as nama
+        FROM admin
+        GROUP BY id_admin
+      ) a ON p.id_admin = a.id_admin
       WHERE DATE_FORMAT(p.tanggal, '%Y-%m') = ? 
       ORDER BY p.tanggal DESC, p.created_at DESC
     `;

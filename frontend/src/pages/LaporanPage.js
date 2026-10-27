@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import Modal from '../components/Modal';
 import TemplateIcon from '../components/TemplateIcon';
@@ -35,6 +35,8 @@ function LaporanPage() {
   var [keterangan, setKeterangan] = useState('');
 
   var [actionLoading, setActionLoading] = useState(false);
+  var [exporting, setExporting] = useState(false);
+  var exportInProgress = useRef(false);
 
   var token = localStorage.getItem('token');
   var headers = { Authorization: 'Bearer ' + token };
@@ -188,9 +190,13 @@ function LaporanPage() {
   }
 
   async function handleExportExcel() {
+    if (exportInProgress.current) return;
+
+    exportInProgress.current = true;
+    setExporting(true);
     try {
       var selectedYear = (periode && periode.split('-')[0]) || new Date().getFullYear();
-      var response = await axios.get(`${API_BASE_URL}/api/reports/export-excel?year=${selectedYear}&periode=${periode}`, {
+      var response = await axios.get(`${API_BASE_URL}/api/reports/export-excel?year=${selectedYear}&periode=${periode}&scope=month`, {
         headers: headers,
         responseType: 'blob'
       });
@@ -201,7 +207,7 @@ function LaporanPage() {
       var url = URL.createObjectURL(blob);
       var link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `Laporan_Keuangan_Tahunan_${selectedYear}_(Januari-Desember).xlsx`);
+      link.setAttribute('download', `Laporan_Keuangan_${periode}.xlsx`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -212,6 +218,9 @@ function LaporanPage() {
       }, 1000);
     } catch (err) {
       alert('Gagal mendownload laporan: ' + err.message);
+    } finally {
+      exportInProgress.current = false;
+      setExporting(false);
     }
   }
 
@@ -325,12 +334,12 @@ function LaporanPage() {
             onChange={function (e) { setPeriode(e.target.value); }}
             style={{ width: '160px', padding: '10px', fontSize: '0.9rem', borderRadius: '5px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
           />
-          <button className="btn btn-primary" onClick={handleExportExcel} disabled={loading} style={{
+          <button className="btn btn-primary" onClick={handleExportExcel} disabled={loading || exporting} style={{
             background: 'var(--md-primary-fixed)',
             color: 'var(--md-on-primary-fixed-variant)',
             fontWeight: '700'
           }}>
-            <TemplateIcon name="document" size={16} style={{ marginRight: '6px' }} /> Export Excel
+            <TemplateIcon name="document" size={16} style={{ marginRight: '6px' }} /> {exporting ? 'Menyiapkan...' : 'Export Excel'}
           </button>
         </div>
       </div>
